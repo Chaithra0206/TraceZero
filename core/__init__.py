@@ -7,6 +7,10 @@ from core.contracts import (
     DeletionReceipt,
     HandoffPacket,
 )
+from core.handoff import (
+    create_handoff,
+    get_handoff,
+)
 
 __all__ = [
     "SourceSpan",
@@ -14,4 +18,6 @@ __all__ = [
     "RecallResult",
     "DeletionReceipt",
     "HandoffPacket",
+    "create_handoff",
+    "get_handoff",
 ]
