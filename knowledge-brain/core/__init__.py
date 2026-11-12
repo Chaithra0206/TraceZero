@@ -41,6 +41,10 @@ def run_readonly_sql(
     return store.run_readonly_sql(namespace, sql_query, params)
 
 
+def list_namespaces(store: MemoryStore) -> List[str]:
+    return store.list_namespaces()
+
+
 __all__ = [
     "MemoryStore",
     "embed_text",
@@ -53,6 +57,7 @@ __all__ = [
     "list_quarantined",
     "confirm_quarantined_claim",
     "run_readonly_sql",
+    "list_namespaces",
     "TrustTier",
     "ClaimStatus",
     "ClaimRecord",

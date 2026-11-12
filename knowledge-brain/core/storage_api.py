@@ -280,3 +280,14 @@ class MemoryStore:
             return [dict(r) for r in rows]
         finally:
             ro_conn.close()
+
+    def list_namespaces(self) -> List[str]:
+        """Scan root_dir for all directories containing index.sqlite and return sorted namespace strings."""
+        if not self.sm.root_dir.exists():
+            return []
+        namespaces: List[str] = []
+        for db_file in sorted(self.sm.root_dir.rglob("index.sqlite")):
+            rel_dir = db_file.parent.relative_to(self.sm.root_dir).as_posix()
+            if rel_dir and rel_dir != ".":
+                namespaces.append(rel_dir)
+        return namespaces
