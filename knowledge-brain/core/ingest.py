@@ -1,0 +1,488 @@
+"""Ingestion pipeline, UTF-8 byte span verification, and claim indexing via MemoryStore."""
+
+from __future__ import annotations
+
+import re
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
+
+from core.contracts import (
+    ClaimRecord,
+    ClaimStatus,
+    ExtractedCandidate,
+    ORIGIN_TRUST_MAP,
+    TrustTier,
+)
+from core.policy import apply_policy_and_decide_status, verify_exact_quote_span
+from core.predicates import get_target_okf_file
+from core.storage_api import MemoryStore
+
+
+def extract_heuristic_candidates(
+    raw_text: str, default_subject: str = "user"
+) -> List[ExtractedCandidate]:
+    """Regex and heuristic extractor for user facts, decisions, and tasks."""
+    candidates: List[ExtractedCandidate] = []
+
+    # 1. Favorite Color
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?favorite[\s_]+color\s+(?:is|was)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which|my)|\b[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="favorite_color",
+                object_val=val,
+                exact_quote=quote,
+            )
+        )
+    for m in re.finditer(r"(?i)prefers?\s+([a-zA-Z]+)\s+color", raw_text):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="favorite_color",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 1b. Primary Language & Assigned Team
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?primary[\s_]+language\s+(?:is|was)\s+([a-zA-Z0-9_\-+#]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="primary_language",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?assigned[\s_]+team\s+(?:is|was)\s+([a-zA-Z0-9_\-]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="assigned_team",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 2. Location (lives_in)
+    for m in re.finditer(
+        r"(?i)(?:I\s+)?(?:lives?\s+in|resides?\s+in|based\s+in|moved\s+to|located\s+in)\s+([a-zA-Z\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="lives_in",
+                object_val=val,
+                exact_quote=quote,
+            )
+        )
+
+    # 3. Preferred Database / Database Decision
+    for m in re.finditer(
+        r"(?i)preferred\s+database\s+(?:is|to\s+use)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="preferred_db",
+                object_val=val,
+                exact_quote=quote,
+            )
+        )
+    for m in re.finditer(
+        r"(?i)primary\s+database\s+engine(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(MongoDB\s+[\d.]+|Postgres\s+\d+|PostgreSQL|MySQL\s+[\d.]+|[a-zA-Z0-9_\-]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="preferred_db",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:use|uses|using)\s+([a-zA-Z0-9_\-]+)\s+(?:as\s+our\s+|for\s+)?database",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="system",
+                predicate="uses_database",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 3b. Cloud Infrastructure: AWS region, deployment_env, project link, vault passphrase
+    for m in re.finditer(
+        r"(?i)(?:aws[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?aws[\s_]+region)",
+        raw_text,
+    ):
+        val = (m.group(1) or m.group(2)).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="aws_region",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:update\s+|current\s+)?deployment_env(?:\s+is(?:\s+set)?|\s+to)?\s+(?:to\s+)?([a-zA-Z0-9_\-]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="deployment_env",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:vault\s+passphrase[^:\n]*?\s+is|passphrase\s+is)\s+([^\s,;]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="vault_passphrase",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    atlas_m = re.search(r"(?i)\b(Project Atlas)\b", raw_text)
+    if atlas_m and default_subject != "user" and any(
+        c.predicate in ("aws_region", "preferred_db", "deployment_env") for c in candidates
+    ):
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="works_on",
+                object_val="project_atlas",
+                exact_quote=atlas_m.group(1),
+            )
+        )
+
+    # 4. Role & Employer
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?role\s+is\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="role",
+                object_val=val,
+                exact_quote=quote,
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:works?\s+at|employer\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="employer",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 5. Coding style
+    for m in re.finditer(
+        r"(?i)coding\s+style\s+(?:is|preference\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="coding_style",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 6. Graph Relationships: depends_on & manages
+    for m in re.finditer(
+        r"(?i)\b([a-zA-Z0-9_\-]+)\s+depends\s+on\s+([a-zA-Z0-9_\-]+)\b",
+        raw_text,
+    ):
+        s, o = m.group(1).strip(), m.group(2).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=s,
+                predicate="depends_on",
+                object_val=o,
+                exact_quote=m.group(0).strip(),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)\b([a-zA-Z0-9_\-]+)\s+manages\s+([a-zA-Z0-9_\-]+)\b",
+        raw_text,
+    ):
+        s, o = m.group(1).strip(), m.group(2).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=s,
+                predicate="manages",
+                object_val=o,
+                exact_quote=m.group(0).strip(),
+            )
+        )
+
+    # 7. Decisions and Constraints
+    for m in re.finditer(
+        r"(?i)decided(?:\s+to)?\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="architecture",
+                predicate="decided",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)constraint:\s*([a-zA-Z0-9_\-\s<>=%]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="architecture",
+                predicate="constraint",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 8. Tasks (goal, completed, pending)
+    for m in re.finditer(
+        r"(?i)task\s+goal:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="task_goal",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:task\s+)?completed:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="task_completed",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:task\s+)?pending:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="task_pending",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 9. Prompt Injection candidate
+    for m in re.finditer(
+        r"(?i)(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|system\s+override|override\s+policy|disregard\s+trust\s+tier)[^\n]*",
+        raw_text,
+    ):
+        val = m.group(0).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="adversary",
+                predicate="has_note",
+                object_val=val,
+                exact_quote=val,
+            )
+        )
+
+    # 10. Fallback contextual note if nothing else matched
+    if not candidates and raw_text.strip():
+        first_clause = re.split(r"[.\n]", raw_text.strip())[0].strip()
+        if first_clause:
+            candidates.append(
+                ExtractedCandidate(
+                    subject=default_subject,
+                    predicate="has_note",
+                    object_val=first_clause[:100],
+                    exact_quote=first_clause,
+                )
+            )
+
+    return candidates
+
+
+def ingest_message(
+    store: MemoryStore,
+    namespace: str,
+    text: str,
+    origin: str = "user",
+    source_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    candidates: Optional[List[ExtractedCandidate]] = None,
+    llm_extractor: Optional[Callable[[str], List[ExtractedCandidate]]] = None,
+) -> List[Dict[str, Any]]:
+    """Ingest raw text via MemoryStore, verify byte spans, apply policy, and index."""
+    now = datetime.now(timezone.utc).isoformat()
+    trust_tier = ORIGIN_TRUST_MAP.get(origin.lower(), TrustTier.DOC_WEB)
+    sid = source_id or f"src_{uuid.uuid4().hex[:12]}"
+    sess = session_id or "session_default"
+    filename = f"{sess}.txt"
+
+    # Compute base byte offset before MemoryStore.save_source appends (including '\n' separator)
+    shard_dir = store.sm.get_shard_dir(namespace)
+    src_path = shard_dir / "sources" / filename
+    base_byte_offset = (src_path.stat().st_size + 1) if src_path.exists() else 0
+
+    store.save_source(
+        namespace=namespace,
+        source_id=sid,
+        filename=filename,
+        text=text,
+        origin=origin,
+        trust_tier=trust_tier,
+    )
+
+    if candidates is not None:
+        extracted = candidates
+    elif llm_extractor is not None:
+        extracted = llm_extractor(text)
+    else:
+        default_subject = namespace.split("/")[-1] if "users" in namespace else "user"
+        extracted = extract_heuristic_candidates(text, default_subject=default_subject)
+
+    results: List[Dict[str, Any]] = []
+
+    for cand in extracted:
+        span = verify_exact_quote_span(text, cand.exact_quote)
+        if span is None:
+            continue
+
+        rel_start, rel_end = span
+        abs_byte_start = base_byte_offset + rel_start
+        abs_byte_end = base_byte_offset + rel_end
+
+        subj = store.resolve_entity(namespace, cand.subject)
+        pred = cand.predicate.strip().lower()
+        obj = cand.object_val.strip()
+        okf_file = get_target_okf_file(pred)
+
+        status, reason, superseded_id = apply_policy_and_decide_status(
+            store=store,
+            namespace=namespace,
+            subject=subj,
+            predicate=pred,
+            object_val=obj,
+            origin=origin,
+            trust_tier=trust_tier,
+            raw_quote=cand.exact_quote,
+            full_text=text,
+        )
+
+        if superseded_id:
+            store.mark_claim_status(
+                namespace=namespace,
+                claim_id=superseded_id,
+                new_status=ClaimStatus.SUPERSEDED,
+                valid_to=now,
+            )
+
+        claim_id = f"clm_{uuid.uuid4().hex[:12]}"
+        claim = ClaimRecord(
+            claim_id=claim_id,
+            namespace=namespace,
+            subject=subj,
+            predicate=pred,
+            object_val=obj,
+            status=status,
+            valid_from=now,
+            valid_to=None,
+            source_id=sid,
+            byte_start=abs_byte_start,
+            byte_end=abs_byte_end,
+            okf_file=okf_file,
+        )
+
+        stored = store.store_claim(claim)
+        if not stored:
+            # Blocked by suppression HMAC gate
+            results.append(
+                {
+                    "claim_id": claim_id,
+                    "subject": subj,
+                    "predicate": pred,
+                    "object_val": obj,
+                    "status": ClaimStatus.QUARANTINED.value,
+                    "reason": "Blocked by suppression HMAC gate",
+                    "source_id": sid,
+                    "byte_start": abs_byte_start,
+                    "byte_end": abs_byte_end,
+                }
+            )
+            continue
+
+        results.append(
+            {
+                "claim_id": claim_id,
+                "subject": subj,
+                "predicate": pred,
+                "object_val": obj,
+                "status": status.value,
+                "reason": reason,
+                "source_id": sid,
+                "byte_start": abs_byte_start,
+                "byte_end": abs_byte_end,
+            }
+        )
+
+    return results

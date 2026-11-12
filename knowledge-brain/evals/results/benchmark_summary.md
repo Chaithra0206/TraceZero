@@ -1,34 +1,43 @@
-# Knowledge Brain: 5-Strategy Benchmark Summary
+# TraceZero (Knowledge Brain): 5-Strategy Benchmark Report
 
 - **Execution Mode**: `live`
 - **Deterministic Seed**: `random.seed(42)`
 - **Tokenizer**: `tiktoken` (`cl100k_base`)
-- **Target Namespace**: `acme/users/emp_042` (30 migration sessions: **17,222 full-history tokens**; 17,253 tokens w/ profile)
-- **Verified Deletion Cleanliness**: **100%** (`byte_matches: 0` across 10 probes) vs. **0%** (`Naive RAG / Prompt-stuffed`)
+- **Target Namespace**: `acme_corp/users/emp_042` (30 migration sessions: **17,263 full-history tokens**; 17,294 w/ profile)
+- **Verified Deletion Cleanliness**: **100%** (`byte_scan_matches: 0` across `.sqlite`, `-wal`, `.okf.md`, `sources/*.txt`) vs. **0%** (`Naive RAG / Prompt-stuffed`)
 
-## Strategy Comparison Across 5 Question Types
+## 5-Strategy x 5-Question-Type Evaluation Matrix
 
-| Strategy | Preference (%) | Multi-hop (%) | What Changed (%) | Count/Aggregate (%) | Task State (%) | Overall Accuracy (%) | Context Tokens Used | p50 Latency (ms) | p95 Latency (ms) | Byte-Clean Deletion (%) |
+| Storage Strategy | Preference (%) | Multi-hop (%) | What Changed (%) | Count/Aggregate (%) | Task State (%) | Overall Acc (%) | Avg Tokens (`tiktoken`) | p50 (ms) | p95 (ms) | Byte-Clean (%) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Prompt-stuffed** | 67.5% | 60.0% | 60.0% | 62.5% | 60.0% | **62.0%** | 18,324 | 1.57 | 1.94 | 0% |
-| **Pure Vector** | 87.5% | 75.0% | 67.5% | 62.5% | 75.0% | **73.5%** | 863 | 5.53 | 6.37 | 0% |
-| **Claims/Graph** | 55.0% | 75.0% | 75.0% | 35.0% | 87.5% | **65.5%** | 361 | 0.16 | 0.17 | 0% |
-| **OKF Files** | 92.5% | 75.8% | 67.5% | 50.0% | 22.5% | **61.7%** | 1,004 | 0.01 | 0.01 | 0% |
-| **Hybrid Scoped Engine** | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | **100.0%** | 83 | 1.46 | 2.43 | 100% |
+| **Prompt-stuffed** | 67.5% | 60.0% | 60.0% | 62.5% | 60.0% | **62.0%** | 17,310 | 0.03 | 0.03 | 0% |
+| **Pure Vector (sqlite-vec)** | 92.5% | 75.0% | 75.0% | 72.5% | 75.0% | **78.0%** | 377 | 35.29 | 41.93 | 0% |
+| **Claims / Knowledge Graph** | 100.0% | 100.0% | 75.0% | 100.0% | 100.0% | **95.0%** | 233 | 1.50 | 2.62 | 0% |
+| **OKF Files (.okf.md)** | 100.0% | 92.5% | 75.0% | 100.0% | 85.0% | **90.5%** | 725 | 0.10 | 0.13 | 0% |
+| **SQL / Code (run_readonly_sql)** | 100.0% | 91.7% | 100.0% | 100.0% | 100.0% | **98.3%** | 146 | 0.42 | 0.50 | 0% |
+| **Hybrid Scoped Engine** | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | **100.0%** | 390 | 34.66 | 36.55 | 100% |
 
 ## Live TokenLedger Accounting Summary (10 Queries / Strategy)
 
-| Strategy | Calls | Total Context Tokens | Avg Context Tokens | Total Prompt Tokens | Total Completion Tokens |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Prompt-stuffed** | 10 | 183,240 | 18,324.0 | 183,240 | 0 |
-| **Pure Vector** | 10 | 8,629 | 862.9 | 8,629 | 0 |
-| **Claims/Graph** | 10 | 3,609 | 360.9 | 3,609 | 0 |
-| **OKF Files** | 10 | 10,036 | 1,003.6 | 10,036 | 0 |
-| **Hybrid Scoped Engine** | 10 | 831 | 83.1 | 831 | 0 |
+| Strategy | Calls | Total Context Tokens | Avg Context Tokens | Total Prompt Tokens |
+| :--- | :---: | :---: | :---: | :---: |
+| **Prompt-stuffed** | 10 | 173,100 | 17,310.0 | 173,100 |
+| **Pure Vector (sqlite-vec)** | 10 | 3,772 | 377.2 | 3,772 |
+| **Claims / Knowledge Graph** | 10 | 2,334 | 233.4 | 2,334 |
+| **OKF Files (.okf.md)** | 10 | 7,246 | 724.6 | 7,246 |
+| **SQL / Code (run_readonly_sql)** | 10 | 1,458 | 145.8 | 1,458 |
+| **Hybrid Scoped Engine** | 10 | 3,904 | 390.4 | 3,904 |
 
-## Key Architectural Findings
+## Key Measured Findings
 
-1. **Token Budget Discipline**: `Hybrid Scoped Engine` packs canonical facts into **83 tokens** (strictly `<= 800` token budget) vs. **17,222 full-history tokens** (`18,324` formatted tokens in `Prompt-stuffed`, **99.52% token reduction**).
-2. **Sub-2ms Tail Latency**: `Hybrid Scoped Engine` achieves **p50 = 1.46ms** and **p95 = 2.43ms**.
-3. **Trust-Tier Conflict Resolution**: Lower-trust `doc` contradictions (`MySQL 5.7`) and `web` prompt injections (`production-compromised`) are deterministically quarantined from overriding `user`-tier truth (`Postgres 16`, `staging-canary-v2`).
-4. **Cryptographic Erasure**: Verified `forget_target` achieves **100% byte-cleanliness** (`byte_matches: 0` across 10 paraphrased probes) compared to **0%** in naive RAG/prompt-stuffed pipelines.
+1. **Token Savings**: `Hybrid Scoped Engine` averages **390 tokens/query** (strictly `<= 800` budget) vs. **17,263 full-history tokens** (**97.74% reduction**).
+2. **Low Tail Latency**: `Hybrid Scoped Engine` achieves **p50 = 34.66ms**, **p95 = 36.55ms**.
+3. **Single-Strategy Gaps Exposed**: `OKF Files` misses historical updates (`What Changed`), `Pure Vector` leaks stale/disputed/redundant chunks without status filtering, `Prompt-stuffed` blows context budgets and leaks poisoned injections, while `Hybrid Scoped Engine` dynamically routes across SQL, Recursive CTE, OKF, and Vector.
+
+## Full-History vs. Naive Top-K Vector RAG vs. TraceZero (Knowledge Brain)
+
+| System / Baseline | Avg Tokens / Query | Token Savings vs 30-Session History | p50 / p95 Latency (ms) | Contradiction Acc (%) | Poison Resistance (%) | Abstention Precision (%) | Verified Byte-Clean Deletion (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Full-History Prompt Stuffing (30 Sessions)** | 17,263 | 0.0% | 0.01 / 0.02 | 0.0% | 0.0% | 0.0% | 0.0% |
+| **Plain Top-K Vector RAG / OpenMemory Baseline** | 136.3 | 99.2% | 44.97 / 45.33 | 0.0% | 0.0% | 0.0% | 0.0% |
+| **TraceZero (Knowledge Brain)** | **310.2** | **98.20%** | **5.93 / 34.29** | **100.0%** | **100.0%** | **100.0%** | **100.0% (`bytes=0`)** |

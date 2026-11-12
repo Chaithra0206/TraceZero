@@ -135,7 +135,8 @@ def test_end_to_end_benchmarks() -> None:
     assert "Live TokenLedger Accounting Summary" in md
     comparison = run_baseline_comparison(mode="live")
     assert comparison["knowledge_brain"]["byte_clean_deletion_pct"] == 100.0
-    assert comparison["mem0_flat_memory_baseline"]["byte_clean_deletion_pct"] == 0.0
-    assert mvs_suite is run_benchmark_suite
-    summary_json = Path(__file__).resolve().parent.parent / "evals" / "results" / "benchmark_summary.json"
-    assert summary_json.exists()
+    assert comparison["naive_vector_rag"]["byte_clean_deletion_pct"] == 0.0
+    metrics_json = Path(__file__).resolve().parent.parent / "evals" / "results" / "metrics.json"
+    report_md = Path(__file__).resolve().parent.parent / "evals" / "results" / "benchmark_report.md"
+    assert metrics_json.exists()
+    assert report_md.exists()

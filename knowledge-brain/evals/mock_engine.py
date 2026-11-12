@@ -104,7 +104,7 @@ def _extract_slot(text: str) -> str | None:
     return None
 
 
-def ingest_message(namespace: str, text: str, origin: str) -> list[str]:
+def ingest_message(namespace: str, text: str, origin: str, session_id: str | None = None) -> list[str]:
     """Ingest a message into the specified namespace with trust-tier & injection checks."""
     if namespace not in _MEMORY_STORE:
         _MEMORY_STORE[namespace] = []
