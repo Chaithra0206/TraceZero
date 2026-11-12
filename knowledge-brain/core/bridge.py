@@ -133,10 +133,17 @@ def _extract_claim_triples(text: str, namespace: str) -> List[Tuple[str, str, st
             continue
 
         # Check DB / tool preferences: "preferred DB is PostgreSQL" / "DB preference is MongoDB"
-        db_match = re.search(r"(?:preferred\s+DB\s+is|database\s+of\s+choice\s+is|DB\s+preference\s+is)\s+([A-Za-z0-9_\-]+)", line, re.IGNORECASE)
+        db_match = re.search(r"(?:preferred\s+DB\s+is|database\s+of\s+choice\s+is|DB\s+preference\s+is|switch\s+(?:from\s+\w+\s+)?to)\s+([A-Za-z0-9_\-\s]+?)(?:\.|$)", line, re.IGNORECASE)
         if db_match:
             val = db_match.group(1).strip().rstrip(".,")
-            triples.append((default_sub, "preferred_db", val))
+            triples.append((default_sub, "target_database", val))
+            continue
+
+        # Check primary key specifications: "primary keys in payment tables must use uuidv7"
+        pk_match = re.search(r"(?:primary\s+keys?.*?must\s+use|primary\s+keys?\s+(?:are|format|is))\s+([A-Za-z0-9_\-]+)", line, re.IGNORECASE)
+        if pk_match:
+            val = pk_match.group(1).strip().rstrip(".,")
+            triples.append((default_sub, "primary_key_spec", val))
             continue
 
         # Check key: value
