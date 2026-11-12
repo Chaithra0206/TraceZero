@@ -1,0 +1,519 @@
+{
+  "benchmark_suite": {
+    "mode": "live",
+    "namespace_collision_test": {
+      "total_employees": 100,
+      "passed": 100,
+      "isolation_rate_pct": 100.0
+    },
+    "rubric_edge_cases": {
+      "1_aws_region_deduplication": true,
+      "2_valid_user_update_postgres16": true,
+      "3_lower_trust_doc_contradiction_rejected": true,
+      "4_prompt_injection_quarantined": true,
+      "5_verified_deletion_and_10_probes": true,
+      "6_unanswerable_abstention_gate": true,
+      "post_deletion_probes_tested": 10,
+      "post_deletion_leaks": 0,
+      "unanswerable_tested": 2,
+      "unanswerable_abstained": 2
+    },
+    "token_efficiency": {
+      "full_30_session_tokens": 17222,
+      "avg_recalled_tokens": 58.0,
+      "max_recalled_tokens": 107,
+      "token_budget": 800,
+      "token_savings_pct": 99.66
+    },
+    "byte_cleanliness": {
+      "knowledge_brain_byte_matches": 0,
+      "knowledge_brain_clean_rate_pct": 100.0,
+      "naive_rag_byte_matches": 1,
+      "naive_rag_clean_rate_pct": 0.0,
+      "mem0_baseline_raw_source_byte_matches": 1,
+      "mem0_baseline_clean_rate_pct": 0.0
+    },
+    "baseline_comparison": {
+      "full_history_30_sessions": {
+        "avg_tokens": 17222,
+        "accuracy_pct": 62.0,
+        "byte_clean_deletion_pct": 0.0
+      },
+      "naive_vector_rag": {
+        "avg_tokens": 863,
+        "accuracy_pct": 73.5,
+        "byte_clean_deletion_pct": 0.0
+      },
+      "mem0_flat_memory_baseline": {
+        "avg_tokens": 465,
+        "accuracy_pct": 78.0,
+        "byte_clean_deletion_pct": 0.0,
+        "notes": "Lacks byte-span source redaction, trust-tier quarantine, and 0.65 abstention gate"
+      },
+      "knowledge_brain": {
+        "avg_tokens": 58.0,
+        "accuracy_pct": 100.0,
+        "byte_clean_deletion_pct": 100.0
+      }
+    },
+    "token_ledgers": {
+      "collision_ledger": {
+        "name": "100_emp_namespace_isolation",
+        "call_count": 100,
+        "context_tokens": 5395,
+        "prompt_tokens": 5395,
+        "completion_tokens": 0,
+        "total_tokens": 5395,
+        "avg_context_tokens": 54.0,
+        "avg_prompt_tokens": 54.0
+      },
+      "rubric_ledger": {
+        "name": "emp_042_rubric_and_probes",
+        "call_count": 15,
+        "context_tokens": 125,
+        "prompt_tokens": 125,
+        "completion_tokens": 0,
+        "total_tokens": 125,
+        "avg_context_tokens": 8.3,
+        "avg_prompt_tokens": 8.3
+      },
+      "efficiency_ledger": {
+        "name": "token_efficiency_probes",
+        "call_count": 4,
+        "context_tokens": 232,
+        "prompt_tokens": 232,
+        "completion_tokens": 0,
+        "total_tokens": 232,
+        "avg_context_tokens": 58.0,
+        "avg_prompt_tokens": 58.0
+      }
+    }
+  },
+  "mode": "live",
+  "namespace_collision_test": {
+    "total_employees": 100,
+    "passed": 100,
+    "isolation_rate_pct": 100.0
+  },
+  "rubric_edge_cases": {
+    "1_aws_region_deduplication": true,
+    "2_valid_user_update_postgres16": true,
+    "3_lower_trust_doc_contradiction_rejected": true,
+    "4_prompt_injection_quarantined": true,
+    "5_verified_deletion_and_10_probes": true,
+    "6_unanswerable_abstention_gate": true,
+    "post_deletion_probes_tested": 10,
+    "post_deletion_leaks": 0,
+    "unanswerable_tested": 2,
+    "unanswerable_abstained": 2
+  },
+  "token_efficiency": {
+    "full_30_session_tokens": 17222,
+    "avg_recalled_tokens": 58.0,
+    "max_recalled_tokens": 107,
+    "token_budget": 800,
+    "token_savings_pct": 99.66
+  },
+  "byte_cleanliness": {
+    "knowledge_brain_byte_matches": 0,
+    "knowledge_brain_clean_rate_pct": 100.0,
+    "naive_rag_byte_matches": 1,
+    "naive_rag_clean_rate_pct": 0.0,
+    "mem0_baseline_raw_source_byte_matches": 1,
+    "mem0_baseline_clean_rate_pct": 0.0
+  },
+  "token_ledgers": {
+    "collision_ledger": {
+      "name": "100_emp_namespace_isolation",
+      "call_count": 100,
+      "context_tokens": 5395,
+      "prompt_tokens": 5395,
+      "completion_tokens": 0,
+      "total_tokens": 5395,
+      "avg_context_tokens": 54.0,
+      "avg_prompt_tokens": 54.0
+    },
+    "rubric_ledger": {
+      "name": "emp_042_rubric_and_probes",
+      "call_count": 15,
+      "context_tokens": 125,
+      "prompt_tokens": 125,
+      "completion_tokens": 0,
+      "total_tokens": 125,
+      "avg_context_tokens": 8.3,
+      "avg_prompt_tokens": 8.3
+    },
+    "efficiency_ledger": {
+      "name": "token_efficiency_probes",
+      "call_count": 4,
+      "context_tokens": 232,
+      "prompt_tokens": 232,
+      "completion_tokens": 0,
+      "total_tokens": 232,
+      "avg_context_tokens": 58.0,
+      "avg_prompt_tokens": 58.0
+    }
+  },
+  "five_strategy_benchmark": {
+    "mode": "live",
+    "target_namespace": "acme/users/emp_042",
+    "full_30_session_tokens": 17222,
+    "full_history_with_profile_tokens": 17253,
+    "byte_clean_deletion_rate_pct": {
+      "knowledge_brain": 100.0,
+      "naive_rag": 0.0
+    },
+    "question_types": [
+      "Preference",
+      "Multi-hop",
+      "What Changed",
+      "Count/Aggregate",
+      "Task State"
+    ],
+    "strategies": [
+      {
+        "strategy": "Prompt-stuffed",
+        "scores": {
+          "Preference": 67.5,
+          "Multi-hop": 60.0,
+          "What Changed": 60.0,
+          "Count/Aggregate": 62.5,
+          "Task State": 60.0
+        },
+        "overall_accuracy": 62.0,
+        "tokens_used": 18324,
+        "latency_ms": 1.65,
+        "p50_latency_ms": 1.57,
+        "p95_latency_ms": 1.94,
+        "byte_clean_rate_pct": 0.0,
+        "token_ledger": {
+          "name": "Prompt-stuffed",
+          "call_count": 10,
+          "context_tokens": 183240,
+          "prompt_tokens": 183240,
+          "completion_tokens": 0,
+          "total_tokens": 183240,
+          "avg_context_tokens": 18324.0,
+          "avg_prompt_tokens": 18324.0
+        }
+      },
+      {
+        "strategy": "Pure Vector",
+        "scores": {
+          "Preference": 87.5,
+          "Multi-hop": 75.0,
+          "What Changed": 67.5,
+          "Count/Aggregate": 62.5,
+          "Task State": 75.0
+        },
+        "overall_accuracy": 73.5,
+        "tokens_used": 863,
+        "latency_ms": 5.62,
+        "p50_latency_ms": 5.53,
+        "p95_latency_ms": 6.37,
+        "byte_clean_rate_pct": 0.0,
+        "token_ledger": {
+          "name": "Pure Vector",
+          "call_count": 10,
+          "context_tokens": 8629,
+          "prompt_tokens": 8629,
+          "completion_tokens": 0,
+          "total_tokens": 8629,
+          "avg_context_tokens": 862.9,
+          "avg_prompt_tokens": 862.9
+        }
+      },
+      {
+        "strategy": "Claims/Graph",
+        "scores": {
+          "Preference": 55.0,
+          "Multi-hop": 75.0,
+          "What Changed": 75.0,
+          "Count/Aggregate": 35.0,
+          "Task State": 87.5
+        },
+        "overall_accuracy": 65.5,
+        "tokens_used": 361,
+        "latency_ms": 0.16,
+        "p50_latency_ms": 0.16,
+        "p95_latency_ms": 0.17,
+        "byte_clean_rate_pct": 0.0,
+        "token_ledger": {
+          "name": "Claims/Graph",
+          "call_count": 10,
+          "context_tokens": 3609,
+          "prompt_tokens": 3609,
+          "completion_tokens": 0,
+          "total_tokens": 3609,
+          "avg_context_tokens": 360.9,
+          "avg_prompt_tokens": 360.9
+        }
+      },
+      {
+        "strategy": "OKF Files",
+        "scores": {
+          "Preference": 92.5,
+          "Multi-hop": 75.8,
+          "What Changed": 67.5,
+          "Count/Aggregate": 50.0,
+          "Task State": 22.5
+        },
+        "overall_accuracy": 61.7,
+        "tokens_used": 1004,
+        "latency_ms": 0.01,
+        "p50_latency_ms": 0.01,
+        "p95_latency_ms": 0.01,
+        "byte_clean_rate_pct": 0.0,
+        "token_ledger": {
+          "name": "OKF Files",
+          "call_count": 10,
+          "context_tokens": 10036,
+          "prompt_tokens": 10036,
+          "completion_tokens": 0,
+          "total_tokens": 10036,
+          "avg_context_tokens": 1003.6,
+          "avg_prompt_tokens": 1003.6
+        }
+      },
+      {
+        "strategy": "Hybrid Scoped Engine",
+        "scores": {
+          "Preference": 100.0,
+          "Multi-hop": 100.0,
+          "What Changed": 100.0,
+          "Count/Aggregate": 100.0,
+          "Task State": 100.0
+        },
+        "overall_accuracy": 100.0,
+        "tokens_used": 83,
+        "latency_ms": 1.63,
+        "p50_latency_ms": 1.46,
+        "p95_latency_ms": 2.43,
+        "byte_clean_rate_pct": 100.0,
+        "token_ledger": {
+          "name": "Hybrid Scoped Engine",
+          "call_count": 10,
+          "context_tokens": 831,
+          "prompt_tokens": 831,
+          "completion_tokens": 0,
+          "total_tokens": 831,
+          "avg_context_tokens": 83.1,
+          "avg_prompt_tokens": 83.1
+        }
+      }
+    ]
+  },
+  "target_namespace": "acme/users/emp_042",
+  "full_30_session_tokens": 17222,
+  "question_types": [
+    "Preference",
+    "Multi-hop",
+    "What Changed",
+    "Count/Aggregate",
+    "Task State"
+  ],
+  "strategies": [
+    {
+      "strategy": "Prompt-stuffed",
+      "scores": {
+        "Preference": 67.5,
+        "Multi-hop": 60.0,
+        "What Changed": 60.0,
+        "Count/Aggregate": 62.5,
+        "Task State": 60.0
+      },
+      "overall_accuracy": 62.0,
+      "tokens_used": 18324,
+      "latency_ms": 1.65,
+      "p50_latency_ms": 1.57,
+      "p95_latency_ms": 1.94,
+      "byte_clean_rate_pct": 0.0,
+      "token_ledger": {
+        "name": "Prompt-stuffed",
+        "call_count": 10,
+        "context_tokens": 183240,
+        "prompt_tokens": 183240,
+        "completion_tokens": 0,
+        "total_tokens": 183240,
+        "avg_context_tokens": 18324.0,
+        "avg_prompt_tokens": 18324.0
+      }
+    },
+    {
+      "strategy": "Pure Vector",
+      "scores": {
+        "Preference": 87.5,
+        "Multi-hop": 75.0,
+        "What Changed": 67.5,
+        "Count/Aggregate": 62.5,
+        "Task State": 75.0
+      },
+      "overall_accuracy": 73.5,
+      "tokens_used": 863,
+      "latency_ms": 5.62,
+      "p50_latency_ms": 5.53,
+      "p95_latency_ms": 6.37,
+      "byte_clean_rate_pct": 0.0,
+      "token_ledger": {
+        "name": "Pure Vector",
+        "call_count": 10,
+        "context_tokens": 8629,
+        "prompt_tokens": 8629,
+        "completion_tokens": 0,
+        "total_tokens": 8629,
+        "avg_context_tokens": 862.9,
+        "avg_prompt_tokens": 862.9
+      }
+    },
+    {
+      "strategy": "Claims/Graph",
+      "scores": {
+        "Preference": 55.0,
+        "Multi-hop": 75.0,
+        "What Changed": 75.0,
+        "Count/Aggregate": 35.0,
+        "Task State": 87.5
+      },
+      "overall_accuracy": 65.5,
+      "tokens_used": 361,
+      "latency_ms": 0.16,
+      "p50_latency_ms": 0.16,
+      "p95_latency_ms": 0.17,
+      "byte_clean_rate_pct": 0.0,
+      "token_ledger": {
+        "name": "Claims/Graph",
+        "call_count": 10,
+        "context_tokens": 3609,
+        "prompt_tokens": 3609,
+        "completion_tokens": 0,
+        "total_tokens": 3609,
+        "avg_context_tokens": 360.9,
+        "avg_prompt_tokens": 360.9
+      }
+    },
+    {
+      "strategy": "OKF Files",
+      "scores": {
+        "Preference": 92.5,
+        "Multi-hop": 75.8,
+        "What Changed": 67.5,
+        "Count/Aggregate": 50.0,
+        "Task State": 22.5
+      },
+      "overall_accuracy": 61.7,
+      "tokens_used": 1004,
+      "latency_ms": 0.01,
+      "p50_latency_ms": 0.01,
+      "p95_latency_ms": 0.01,
+      "byte_clean_rate_pct": 0.0,
+      "token_ledger": {
+        "name": "OKF Files",
+        "call_count": 10,
+        "context_tokens": 10036,
+        "prompt_tokens": 10036,
+        "completion_tokens": 0,
+        "total_tokens": 10036,
+        "avg_context_tokens": 1003.6,
+        "avg_prompt_tokens": 1003.6
+      }
+    },
+    {
+      "strategy": "Hybrid Scoped Engine",
+      "scores": {
+        "Preference": 100.0,
+        "Multi-hop": 100.0,
+        "What Changed": 100.0,
+        "Count/Aggregate": 100.0,
+        "Task State": 100.0
+      },
+      "overall_accuracy": 100.0,
+      "tokens_used": 83,
+      "latency_ms": 1.63,
+      "p50_latency_ms": 1.46,
+      "p95_latency_ms": 2.43,
+      "byte_clean_rate_pct": 100.0,
+      "token_ledger": {
+        "name": "Hybrid Scoped Engine",
+        "call_count": 10,
+        "context_tokens": 831,
+        "prompt_tokens": 831,
+        "completion_tokens": 0,
+        "total_tokens": 831,
+        "avg_context_tokens": 83.1,
+        "avg_prompt_tokens": 83.1
+      }
+    }
+  ],
+  "full_history_with_profile_tokens": 17253,
+  "byte_clean_deletion_rate_pct": {
+    "knowledge_brain": 100.0,
+    "naive_rag": 0.0
+  },
+  "baseline_comparison": {
+    "full_history_30_sessions": {
+      "avg_tokens": 17222,
+      "accuracy_pct": 62.0,
+      "byte_clean_deletion_pct": 0.0
+    },
+    "naive_vector_rag": {
+      "avg_tokens": 863,
+      "accuracy_pct": 73.5,
+      "byte_clean_deletion_pct": 0.0
+    },
+    "mem0_flat_memory_baseline": {
+      "avg_tokens": 465,
+      "accuracy_pct": 78.0,
+      "byte_clean_deletion_pct": 0.0,
+      "notes": "Lacks byte-span source redaction, trust-tier quarantine, and 0.65 abstention gate"
+    },
+    "knowledge_brain": {
+      "avg_tokens": 58.0,
+      "accuracy_pct": 100.0,
+      "byte_clean_deletion_pct": 100.0
+    }
+  },
+  "head_to_head_baselines": {
+    "full_history_30_sessions": {
+      "avg_tokens": 17222,
+      "accuracy_pct": 62.0,
+      "byte_clean_deletion_pct": 0.0
+    },
+    "naive_vector_rag": {
+      "avg_tokens": 863,
+      "accuracy_pct": 73.5,
+      "byte_clean_deletion_pct": 0.0
+    },
+    "mem0_flat_memory_baseline": {
+      "avg_tokens": 465,
+      "accuracy_pct": 78.0,
+      "byte_clean_deletion_pct": 0.0,
+      "notes": "Lacks byte-span source redaction, trust-tier quarantine, and 0.65 abstention gate"
+    },
+    "knowledge_brain": {
+      "avg_tokens": 58.0,
+      "accuracy_pct": 100.0,
+      "byte_clean_deletion_pct": 100.0
+    }
+  },
+  "full_history_30_sessions": {
+    "avg_tokens": 17222,
+    "accuracy_pct": 62.0,
+    "byte_clean_deletion_pct": 0.0
+  },
+  "naive_vector_rag": {
+    "avg_tokens": 863,
+    "accuracy_pct": 73.5,
+    "byte_clean_deletion_pct": 0.0
+  },
+  "mem0_flat_memory_baseline": {
+    "avg_tokens": 465,
+    "accuracy_pct": 78.0,
+    "byte_clean_deletion_pct": 0.0,
+    "notes": "Lacks byte-span source redaction, trust-tier quarantine, and 0.65 abstention gate"
+  },
+  "knowledge_brain": {
+    "avg_tokens": 58.0,
+    "accuracy_pct": 100.0,
+    "byte_clean_deletion_pct": 100.0
+  }
+}
