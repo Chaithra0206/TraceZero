@@ -1,0 +1,958 @@
+"""Core Memory Bridge Adapter for Knowledge Brain.
+
+Connects MCP and agent clients directly to Knowledge Brain micro-shards.
+Provides auditable, provenance-backed memory operations:
+- remember: Appends to sources/, extracts claims, and updates .okf.md
+- recall: 3-tier recall (L0 abstract, L1 claims, L2 quotes) with honest abstention
+- explain: Byte-accurate source quote retrieval from raw files
+- history: Full temporal lineage of active and superseded claims
+- quarantine_list / confirm_quarantine: Intercepts & handles prompt injections
+- forget / verify_deletion: Cryptographic unlearning with byte-level verification
+- handoff_create / handoff_get: Seamless OKF v0.2 cross-agent task handoffs
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import re
+import sqlite3
+import time
+from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import uuid4
+
+import yaml
+
+try:
+    from core.contracts import ClaimRecord, DeletionReceipt, HandoffPacket, RecallResult, SourceSpan
+    from core.handoff import create_handoff, get_handoff, count_tokens, _resolve_memory_root
+except ImportError:
+    from contracts import ClaimRecord, DeletionReceipt, HandoffPacket, RecallResult, SourceSpan
+    from handoff import create_handoff, get_handoff, count_tokens, _resolve_memory_root
+
+
+HMAC_SECRET = b"knowledge-brain-secret-key-v1"
+
+INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+all\s+rules", re.IGNORECASE),
+    re.compile(r"leak\s+keys", re.IGNORECASE),
+    re.compile(r"exfiltrat", re.IGNORECASE),
+    re.compile(r"bypass\s+security", re.IGNORECASE),
+    re.compile(r"system\s+instruction\s+override", re.IGNORECASE),
+    re.compile(r"attacker\.local", re.IGNORECASE),
+]
+
+
+def _check_prompt_injection(text: str, origin: str) -> bool:
+    """Detect prompt injection or untrusted external ingestion."""
+    if origin in ("external_untrusted", "untrusted_scrape", "poisoned"):
+        return True
+    for pat in INJECTION_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+
+def _get_shard_dir(namespace: str, memory_root: Optional[Union[str, Path]] = None) -> Path:
+    root = _resolve_memory_root(memory_root)
+    shard_dir = root / namespace
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    (shard_dir / "sources").mkdir(parents=True, exist_ok=True)
+    (shard_dir / "receipts").mkdir(parents=True, exist_ok=True)
+    return shard_dir
+
+
+def _ensure_tables(conn: sqlite3.Connection) -> None:
+    """Ensure micro-shard SQLite tables exist."""
+    cursor = conn.cursor()
+    cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS sources_index (
+            source_id TEXT PRIMARY KEY,
+            file_path TEXT NOT NULL,
+            sha256_hash TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            trust_tier INTEGER NOT NULL,
+            byte_start INTEGER NOT NULL,
+            byte_end INTEGER NOT NULL,
+            quote TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS claims_index (
+            claim_id TEXT PRIMARY KEY,
+            namespace TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object_val TEXT NOT NULL,
+            status TEXT CHECK(status IN ('active', 'superseded', 'disputed', 'quarantined')) NOT NULL,
+            valid_from TEXT NOT NULL,
+            valid_to TEXT,
+            source_id TEXT NOT NULL,
+            byte_start INTEGER NOT NULL,
+            byte_end INTEGER NOT NULL,
+            okf_file TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(source_id) REFERENCES sources_index(source_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS lineage_index (
+            edge_id TEXT PRIMARY KEY,
+            parent_claim_id TEXT NOT NULL,
+            child_claim_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL,
+            timestamp TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS suppression_hashes (
+            hash_id TEXT PRIMARY KEY,
+            hmac_hash TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_value TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+    """)
+    conn.commit()
+
+
+def _extract_claim_triples(text: str, namespace: str) -> List[Tuple[str, str, str]]:
+    """Simple heuristic triple extractor for memory statements."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    triples = []
+    default_sub = namespace.split("/")[-1] if "/" in namespace else "user"
+
+    for line in lines:
+        # Check patterns like "lives in Bengaluru" / "location is Bengaluru"
+        loc_match = re.search(r"(?:lives\s+in|location\s+is|moved\s+to|relocated\s+to)\s+([A-Za-z\s]+)", line, re.IGNORECASE)
+        if loc_match:
+            val = loc_match.group(1).strip().rstrip(".,")
+            triples.append((default_sub, "lives_in", val))
+            continue
+
+        # Check DB / tool preferences: "preferred DB is PostgreSQL" / "DB preference is MongoDB"
+        db_match = re.search(r"(?:preferred\s+DB\s+is|database\s+of\s+choice\s+is|DB\s+preference\s+is)\s+([A-Za-z0-9_\-]+)", line, re.IGNORECASE)
+        if db_match:
+            val = db_match.group(1).strip().rstrip(".,")
+            triples.append((default_sub, "preferred_db", val))
+            continue
+
+        # Check key: value
+        if ":" in line and not line.startswith("[") and not line.startswith("http"):
+            parts = line.split(":", 1)
+            p = parts[0].strip().replace(" ", "_").lower()
+            o = parts[1].strip()
+            triples.append((default_sub, p, o))
+            continue
+
+    if not triples:
+        triples.append((default_sub, "stated", text.strip()))
+
+    return triples
+
+
+def remember(
+    namespace: str,
+    text: str,
+    origin: str = "agent_interaction",
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Ingest new information, update source file, SQLite index, and OKF markdown."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    _ensure_tables(conn)
+
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    today = now_dt.strftime("%Y-%m-%d")
+
+    # Check for adversarial prompt injection
+    is_injection = _check_prompt_injection(text, origin)
+    claim_status = "quarantined" if is_injection else "active"
+    trust_tier = 1 if is_injection else (4 if origin == "user_session" else 3)
+
+    # Write source file
+    sources_dir = shard_dir / "sources"
+    source_id = f"src_{uuid4().hex[:6]}"
+    filename = f"session_{now_dt.strftime('%Y%m%d_%H%M%S')}_{source_id}.txt"
+    source_file = sources_dir / filename
+
+    source_content = f"[{now_iso}] Origin: {origin} (trust_tier={trust_tier})\n{text.strip()}\n"
+    source_bytes = source_content.encode("utf-8")
+    source_file.write_bytes(source_bytes)
+    sha256_hash = hashlib.sha256(source_bytes).hexdigest()
+
+    # Find byte start and byte end for the text
+    text_bytes = text.strip().encode("utf-8")
+    byte_start = source_bytes.find(text_bytes)
+    if byte_start == -1:
+        byte_start = 0
+        byte_end = len(source_bytes)
+    else:
+        byte_end = byte_start + len(text_bytes)
+
+    rel_source_path = f"sources/{filename}"
+
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO sources_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            source_id,
+            rel_source_path,
+            sha256_hash,
+            origin,
+            trust_tier,
+            byte_start,
+            byte_end,
+            text.strip()[:150],
+            now_iso,
+        ),
+    )
+
+    extracted_triples = _extract_claim_triples(text, namespace)
+    created_claims = []
+
+    for sub, pred, obj in extracted_triples:
+        claim_id = f"claim_{uuid4().hex[:8]}"
+
+        if claim_status == "active":
+            # Check if an existing active claim has same subject and predicate to supersede
+            cursor.execute(
+                "SELECT claim_id FROM claims_index WHERE namespace = ? AND subject = ? AND predicate = ? AND status = 'active'",
+                (namespace, sub, pred),
+            )
+            old_rows = cursor.fetchall()
+            for old_row in old_rows:
+                old_id = old_row["claim_id"]
+                cursor.execute(
+                    "UPDATE claims_index SET status = 'superseded', valid_to = ? WHERE claim_id = ?",
+                    (today, old_id),
+                )
+                edge_id = f"edge_{uuid4().hex[:6]}"
+                cursor.execute(
+                    "INSERT INTO lineage_index VALUES (?, ?, ?, ?, ?)",
+                    (edge_id, old_id, claim_id, "superseded_by", now_iso),
+                )
+
+        cursor.execute(
+            "INSERT INTO claims_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                claim_id,
+                namespace,
+                sub,
+                pred,
+                obj,
+                claim_status,
+                today,
+                None,
+                source_id,
+                byte_start,
+                byte_end,
+                "preferences.okf.md",
+                now_iso,
+            ),
+        )
+        created_claims.append({
+            "claim_id": claim_id,
+            "subject": sub,
+            "predicate": pred,
+            "object_val": obj,
+            "status": claim_status,
+        })
+
+    conn.commit()
+    conn.close()
+
+    # Update preferences.okf.md
+    _refresh_preferences_okf(shard_dir, namespace)
+
+    return {
+        "status": "success",
+        "source_id": source_id,
+        "quarantined": is_injection,
+        "claims": created_claims,
+    }
+
+
+def _refresh_preferences_okf(shard_dir: Path, namespace: str) -> None:
+    """Synchronize preferences.okf.md with SQLite index."""
+    db_path = shard_dir / "index.sqlite"
+    if not db_path.exists():
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM claims_index WHERE namespace = ? ORDER BY created_at ASC", (namespace,))
+    claims = cursor.fetchall()
+
+    cursor.execute("SELECT * FROM sources_index")
+    sources = {row["source_id"]: row for row in cursor.fetchall()}
+    conn.close()
+
+    active_claims = [c for c in claims if c["status"] == "active"]
+    superseded_claims = [c for c in claims if c["status"] == "superseded"]
+    disputed_claims = [c for c in claims if c["status"] == "disputed"]
+    quarantined_claims = [c for c in claims if c["status"] == "quarantined"]
+
+    frontmatter = {
+        "okf_version": "0.2",
+        "namespace": namespace,
+        "title": f"Knowledge Profile for {namespace.split('/')[-1]}",
+        "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "active_claims": len(active_claims),
+        "superseded_claims": len(superseded_claims),
+        "disputed_claims": len(disputed_claims),
+        "quarantined_claims": len(quarantined_claims),
+    }
+
+    yaml_text = yaml.dump(frontmatter, sort_keys=False, default_flow_style=False).strip()
+
+    body_lines = [
+        f"# Knowledge Profile for {namespace.split('/')[-1]}",
+        "",
+        "## Active Claims",
+    ]
+    citations: Dict[str, str] = {}
+
+    for c in active_claims:
+        sid = c["source_id"]
+        body_lines.append(f"- {c['predicate'].replace('_', ' ').capitalize()}: {c['object_val']}.[^{sid}]")
+        if sid in sources:
+            s = sources[sid]
+            citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
+
+    if not active_claims:
+        body_lines.append("- (No active claims)")
+
+    if superseded_claims:
+        body_lines.extend(["", "## Superseded Claims"])
+        for c in superseded_claims:
+            sid = c["source_id"]
+            body_lines.append(f"- {c['predicate'].replace('_', ' ').capitalize()} (Historical): {c['object_val']}.[^{sid}]")
+            if sid in sources:
+                s = sources[sid]
+                citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
+
+    if disputed_claims:
+        body_lines.extend(["", "## Disputed Claims"])
+        for c in disputed_claims:
+            sid = c["source_id"]
+            body_lines.append(f"- {c['predicate'].replace('_', ' ').capitalize()}: {c['object_val']}.[^{sid}]")
+            if sid in sources:
+                s = sources[sid]
+                citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
+
+    if quarantined_claims:
+        body_lines.extend(["", "## Quarantined Detections"])
+        for c in quarantined_claims:
+            sid = c["source_id"]
+            body_lines.append(f"- Adversarial Injection: {c['object_val']}.[^{sid}]")
+            if sid in sources:
+                s = sources[sid]
+                citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
+
+    if citations:
+        body_lines.extend(["", "## Evidence & Citations"])
+        for sid, cite_str in sorted(citations.items()):
+            body_lines.append(f"[^{sid}]: {cite_str}")
+
+    okf_content = f"---\n{yaml_text}\n---\n\n" + "\n".join(body_lines) + "\n"
+    (shard_dir / "preferences.okf.md").write_text(okf_content, encoding="utf-8")
+
+
+def recall(
+    namespace: str,
+    query: str,
+    token_budget: int = 800,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Retrieve 3-tier memory payload (L0 abstract, L1 claims, L2 quotes) or honestly abstain."""
+    t0 = time.perf_counter()
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    full_history_tokens = 0
+    sources_dir = shard_dir / "sources"
+    if sources_dir.exists():
+        for f in sources_dir.iterdir():
+            if f.is_file():
+                try:
+                    full_history_tokens += count_tokens(f.read_text(encoding="utf-8", errors="replace"))
+                except Exception:
+                    pass
+
+    if not db_path.exists():
+        latency = (time.perf_counter() - t0) * 1000
+        return RecallResult(
+            status="abstained",
+            answer_hint="I have no memory of that.",
+            l0_abstract="",
+            l1_claims=[],
+            l2_quotes=[],
+            tokens_used=0,
+            baseline_full_history_tokens=full_history_tokens,
+            latency_ms=round(latency, 2),
+        ).model_dump()
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Check suppression hashes to guarantee suppression compliance
+    cursor.execute("SELECT hmac_hash, target_value FROM suppression_hashes")
+    suppression_rows = cursor.fetchall()
+    stored_hmacs = {row["hmac_hash"] for row in suppression_rows}
+
+    # Check query against HMAC suppression hashes
+    query_bytes = query.strip().encode("utf-8")
+    if hmac.new(HMAC_SECRET, query_bytes, hashlib.sha256).hexdigest() in stored_hmacs:
+        conn.close()
+        latency = (time.perf_counter() - t0) * 1000
+        return RecallResult(
+            status="abstained",
+            answer_hint="I have no memory of that.",
+            l0_abstract="",
+            l1_claims=[],
+            l2_quotes=[],
+            tokens_used=0,
+            baseline_full_history_tokens=full_history_tokens,
+            latency_ms=round(latency, 2),
+        ).model_dump()
+
+    query_lower = query.lower()
+    for w in re.findall(r"\w+", query):
+        w_hmac = hmac.new(HMAC_SECRET, w.encode("utf-8"), hashlib.sha256).hexdigest()
+        if w_hmac in stored_hmacs:
+            conn.close()
+            latency = (time.perf_counter() - t0) * 1000
+            return RecallResult(
+                status="abstained",
+                answer_hint="I have no memory of that.",
+                l0_abstract="",
+                l1_claims=[],
+                l2_quotes=[],
+                tokens_used=0,
+                baseline_full_history_tokens=full_history_tokens,
+                latency_ms=round(latency, 2),
+            ).model_dump()
+
+    for row in suppression_rows:
+        val = row["target_value"].lower()
+        if val != "[suppressed_target]" and val in query_lower:
+            conn.close()
+            latency = (time.perf_counter() - t0) * 1000
+            return RecallResult(
+                status="abstained",
+                answer_hint="I have no memory of that.",
+                l0_abstract="",
+                l1_claims=[],
+                l2_quotes=[],
+                tokens_used=0,
+                baseline_full_history_tokens=full_history_tokens,
+                latency_ms=round(latency, 2),
+            ).model_dump()
+
+    # Search claims_index for active claims
+    cursor.execute(
+        "SELECT * FROM claims_index WHERE namespace = ? AND status = 'active'",
+        (namespace,),
+    )
+    all_active = cursor.fetchall()
+
+    stopwords = {"what", "is", "where", "does", "the", "a", "an", "of", "in", "to", "for", "my", "user", "their"}
+    q_words = [w for w in re.findall(r"\w+", query_lower) if w not in stopwords]
+
+    matching_claims = []
+    for c in all_active:
+        sub = c["subject"].lower()
+        pred = c["predicate"].lower()
+        obj = c["object_val"].lower()
+        c_text = f"{sub} {pred} {obj}"
+
+        score = sum(1 for w in q_words if w in c_text)
+        if score > 0 or not q_words:
+            matching_claims.append(c)
+
+    if not matching_claims:
+        conn.close()
+        latency = (time.perf_counter() - t0) * 1000
+        return RecallResult(
+            status="abstained",
+            answer_hint="I have no memory of that.",
+            l0_abstract="",
+            l1_claims=[],
+            l2_quotes=[],
+            tokens_used=0,
+            baseline_full_history_tokens=full_history_tokens,
+            latency_ms=round(latency, 2),
+        ).model_dump()
+
+    # Read L0 abstract
+    l0_path = shard_dir / ".abstract.md"
+    l0_abstract = l0_path.read_text(encoding="utf-8") if l0_path.exists() else ""
+
+    # Fetch L1 Claims
+    l1_claim_records = []
+    needed_sources = set()
+    for c in matching_claims:
+        rec = ClaimRecord(
+            claim_id=c["claim_id"],
+            namespace=c["namespace"],
+            subject=c["subject"],
+            predicate=c["predicate"],
+            object_val=c["object_val"],
+            status=c["status"],
+            valid_from=c["valid_from"],
+            valid_to=c["valid_to"],
+            source_id=c["source_id"],
+            byte_start=c["byte_start"],
+            byte_end=c["byte_end"],
+            okf_file=c["okf_file"],
+        )
+        l1_claim_records.append(rec)
+        needed_sources.add(c["source_id"])
+
+    # Fetch L2 Source Quotes
+    l2_quotes = []
+    if needed_sources:
+        placeholders = ",".join("?" for _ in needed_sources)
+        cursor.execute(
+            f"SELECT * FROM sources_index WHERE source_id IN ({placeholders})",
+            list(needed_sources),
+        )
+        for s in cursor.fetchall():
+            span = SourceSpan(
+                source_id=s["source_id"],
+                file_path=s["file_path"],
+                sha256_hash=s["sha256_hash"],
+                origin=s["origin"],
+                trust_tier=s["trust_tier"],
+                byte_start=s["byte_start"],
+                byte_end=s["byte_end"],
+                quote=s["quote"],
+            )
+            l2_quotes.append(span)
+
+    conn.close()
+
+    # Build answer hint from primary claim
+    prim = l1_claim_records[0]
+    pred_clean = prim.predicate.replace('_', ' ')
+    answer_hint = f"{prim.subject.capitalize()} {pred_clean} is {prim.object_val}."
+
+    # Pack within token_budget
+    tokens_used = count_tokens(l0_abstract)
+    tokens_used += sum(count_tokens(c.model_dump_json()) for c in l1_claim_records)
+    tokens_used += sum(count_tokens(q.model_dump_json()) for q in l2_quotes)
+
+    latency = (time.perf_counter() - t0) * 1000
+
+    result = RecallResult(
+        status="ok",
+        answer_hint=answer_hint,
+        l0_abstract=l0_abstract,
+        l1_claims=l1_claim_records,
+        l2_quotes=l2_quotes,
+        tokens_used=tokens_used,
+        baseline_full_history_tokens=full_history_tokens,
+        latency_ms=round(latency, 2),
+    )
+    return result.model_dump()
+
+
+def explain(
+    namespace: str,
+    claim_id: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Retrieve exact byte-accurate provenance quote and metadata for a claim."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database not found at {db_path}")
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM claims_index WHERE claim_id = ?", (claim_id,))
+    claim = cursor.fetchone()
+    if not claim:
+        conn.close()
+        raise ValueError(f"Claim with id '{claim_id}' not found in namespace '{namespace}'")
+
+    cursor.execute("SELECT * FROM sources_index WHERE source_id = ?", (claim["source_id"],))
+    source = cursor.fetchone()
+    conn.close()
+
+    if not source:
+        raise ValueError(f"Source with id '{claim['source_id']}' not found")
+
+    # Read exact slice from source file
+    source_file = shard_dir / source["file_path"]
+    exact_slice = ""
+    if source_file.exists():
+        with open(source_file, "rb") as f:
+            f.seek(claim["byte_start"])
+            raw = f.read(claim["byte_end"] - claim["byte_start"])
+            exact_slice = raw.decode("utf-8", errors="replace")
+
+    return {
+        "claim_id": claim["claim_id"],
+        "namespace": claim["namespace"],
+        "subject": claim["subject"],
+        "predicate": claim["predicate"],
+        "object_val": claim["object_val"],
+        "status": claim["status"],
+        "valid_from": claim["valid_from"],
+        "valid_to": claim["valid_to"],
+        "source_id": claim["source_id"],
+        "file_path": source["file_path"],
+        "byte_start": claim["byte_start"],
+        "byte_end": claim["byte_end"],
+        "quote": source["quote"],
+        "exact_source_slice": exact_slice,
+        "trust_tier": source["trust_tier"],
+        "origin": source["origin"],
+        "sha256_hash": source["sha256_hash"],
+    }
+
+
+def history(
+    namespace: str,
+    subject: str,
+    predicate: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> List[Dict[str, Any]]:
+    """Return chronological timeline of all claims (active, superseded, disputed)."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT * FROM claims_index WHERE namespace = ? AND subject = ? AND predicate = ? "
+        "ORDER BY valid_from ASC, created_at ASC",
+        (namespace, subject, predicate),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    timeline = []
+    for r in rows:
+        timeline.append({
+            "claim_id": r["claim_id"],
+            "subject": r["subject"],
+            "predicate": r["predicate"],
+            "object_val": r["object_val"],
+            "status": r["status"],
+            "valid_from": r["valid_from"],
+            "valid_to": r["valid_to"],
+            "source_id": r["source_id"],
+            "created_at": r["created_at"],
+        })
+    return timeline
+
+
+def quarantine_list(
+    namespace: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> List[Dict[str, Any]]:
+    """Return all quarantined claims in the namespace."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT c.*, s.file_path, s.origin, s.quote, s.trust_tier "
+        "FROM claims_index c LEFT JOIN sources_index s ON c.source_id = s.source_id "
+        "WHERE c.namespace = ? AND c.status = 'quarantined' "
+        "ORDER BY c.created_at DESC",
+        (namespace,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        results.append({
+            "claim_id": r["claim_id"],
+            "namespace": r["namespace"],
+            "subject": r["subject"],
+            "predicate": r["predicate"],
+            "object_val": r["object_val"],
+            "source_id": r["source_id"],
+            "file_path": r["file_path"],
+            "quote": r["quote"],
+            "trust_tier": r["trust_tier"],
+            "origin": r["origin"],
+            "threat_reason": "Adversarial prompt injection pattern detected.",
+        })
+    return results
+
+
+def confirm_quarantine(
+    namespace: str,
+    claim_id: str,
+    action: str = "approve",
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Promote or reject a quarantined claim."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database not found at {db_path}")
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT status FROM claims_index WHERE claim_id = ?", (claim_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Claim '{claim_id}' not found")
+
+    if action == "approve":
+        cursor.execute("UPDATE claims_index SET status = 'active' WHERE claim_id = ?", (claim_id,))
+        conn.commit()
+        conn.close()
+        _refresh_preferences_okf(shard_dir, namespace)
+        return {"claim_id": claim_id, "status": "active", "message": "Claim approved and activated."}
+    elif action == "reject":
+        cursor.execute("DELETE FROM claims_index WHERE claim_id = ?", (claim_id,))
+        conn.commit()
+        conn.close()
+        _refresh_preferences_okf(shard_dir, namespace)
+        return {"claim_id": claim_id, "status": "rejected", "message": "Claim rejected and deleted."}
+    else:
+        conn.close()
+        raise ValueError(f"Unknown action: '{action}'. Must be 'approve' or 'reject'.")
+
+
+def forget(
+    namespace: str,
+    target: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Permanently delete and redact target information with byte-level verification."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database not found at {db_path}")
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Find matching claims (by claim_id, target_value in subject/predicate/object_val)
+    cursor.execute(
+        "SELECT * FROM claims_index WHERE namespace = ? AND "
+        "(claim_id = ? OR subject = ? OR predicate = ? OR object_val LIKE ? OR (subject || '|' || predicate) = ?)",
+        (namespace, target, target, target, f"%{target}%", target),
+    )
+    matched_claims = cursor.fetchall()
+    deleted_claim_ids = [c["claim_id"] for c in matched_claims]
+
+    target_bytes = target.encode("utf-8")
+
+    # Redact raw bytes in sources/
+    sources_dir = shard_dir / "sources"
+    if sources_dir.exists():
+        for s_file in sources_dir.iterdir():
+            if s_file.is_file():
+                raw = s_file.read_bytes()
+                if target_bytes in raw:
+                    redacted = raw.replace(target_bytes, b"[REDACTED_BY_USER]")
+                    s_file.write_bytes(redacted)
+
+    # Redact target in any .md files (e.g. preferences.okf.md, tasks.okf.md)
+    for md_file in shard_dir.glob("*.md"):
+        try:
+            raw_md = md_file.read_bytes()
+            if target_bytes in raw_md:
+                md_file.write_bytes(raw_md.replace(target_bytes, b"[REDACTED_BY_USER]"))
+        except Exception:
+            pass
+
+    # Delete claims and edges
+    for cid in deleted_claim_ids:
+        cursor.execute("DELETE FROM claims_index WHERE claim_id = ?", (cid,))
+        cursor.execute("DELETE FROM lineage_index WHERE parent_claim_id = ? OR child_claim_id = ?", (cid, cid))
+
+    # Also delete any other claims or sources mentioning target in object_val or quote
+    cursor.execute("DELETE FROM claims_index WHERE object_val LIKE ?", (f"%{target}%",))
+    cursor.execute("DELETE FROM sources_index WHERE quote LIKE ?", (f"%{target}%",))
+
+    # Record HMAC suppression hash (store mask in target_value to prevent plaintext leakage in sqlite)
+    hmac_val = hmac.new(HMAC_SECRET, target_bytes, hashlib.sha256).hexdigest()
+    hash_id = f"suppr_{uuid4().hex[:6]}"
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    cursor.execute(
+        "INSERT OR REPLACE INTO suppression_hashes VALUES (?, ?, ?, ?, ?)",
+        (hash_id, hmac_val, "claim", "[SUPPRESSED_TARGET]", now_iso),
+    )
+    conn.commit()
+
+    # Execute secure deletion and vacuum
+    cursor.execute("PRAGMA secure_delete = ON;")
+    cursor.execute("PRAGMA journal_mode = DELETE;")
+    cursor.execute("VACUUM;")
+    conn.commit()
+    conn.close()
+
+    # Byte-level verification scan across database and filesystem
+    db_bytes = db_path.read_bytes()
+    sqlite_byte_matches = db_bytes.count(target_bytes)
+
+    fs_matches = 0
+    if sources_dir.exists():
+        for s_file in sources_dir.iterdir():
+            if s_file.is_file():
+                fs_matches += s_file.read_bytes().count(target_bytes)
+
+    wal_path = shard_dir / "index.sqlite-wal"
+    wal_matches = wal_path.read_bytes().count(target_bytes) if wal_path.exists() else 0
+
+    # Probe recall 10 times to verify honest abstention
+    probe_passed = True
+    for _ in range(10):
+        probe_res = recall(namespace, target, memory_root=memory_root)
+        if probe_res.get("status") != "abstained":
+            probe_passed = False
+            break
+
+    probe_str = "VERIFIED_ABSTAINED_10_PROBES" if probe_passed else "PROBE_FAILED"
+    receipt_id = f"del_{uuid4().hex[:8]}"
+
+    receipt = DeletionReceipt(
+        receipt_id=receipt_id,
+        namespace=namespace,
+        target=target,
+        deleted_claim_ids=deleted_claim_ids,
+        hmac_suppression_hash=hmac_val,
+        sqlite_byte_matches=sqlite_byte_matches,
+        wal_byte_matches=wal_matches,
+        filesystem_byte_matches=fs_matches,
+        probe_abstentions=probe_str,
+        sha256_after=hashlib.sha256(db_bytes).hexdigest(),
+        timestamp=now_iso,
+    )
+
+    receipts_dir = shard_dir / "receipts"
+    (receipts_dir / f"{receipt_id}.json").write_text(
+        receipt.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    _refresh_preferences_okf(shard_dir, namespace)
+
+    return receipt.model_dump()
+
+
+def verify_deletion(
+    namespace: str,
+    target: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Verify permanent deletion, checking receipts, byte scans, and probe abstentions."""
+    shard_dir = _get_shard_dir(namespace, memory_root)
+    db_path = shard_dir / "index.sqlite"
+
+    target_bytes = target.encode("utf-8")
+    sqlite_byte_matches = db_path.read_bytes().count(target_bytes) if db_path.exists() else 0
+
+    sources_dir = shard_dir / "sources"
+    fs_matches = 0
+    if sources_dir.exists():
+        for s_file in sources_dir.iterdir():
+            if s_file.is_file():
+                fs_matches += s_file.read_bytes().count(target_bytes)
+
+    # Check suppression hash table
+    has_hash = False
+    if db_path.exists():
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        target_hmac = hmac.new(HMAC_SECRET, target_bytes, hashlib.sha256).hexdigest()
+        cursor.execute("SELECT 1 FROM suppression_hashes WHERE hmac_hash = ? OR target_value = ?", (target_hmac, target))
+        has_hash = cursor.fetchone() is not None
+        conn.close()
+
+    # Probe abstentions
+    probe_passed = True
+    for _ in range(10):
+        probe_res = recall(namespace, target, memory_root=memory_root)
+        if probe_res.get("status") != "abstained":
+            probe_passed = False
+            break
+
+    verified = (sqlite_byte_matches == 0) and (fs_matches == 0) and probe_passed
+
+    return {
+        "verified": verified,
+        "status": "verified_unlearned" if verified else "failed_unlearned",
+        "target": target,
+        "sqlite_byte_matches": sqlite_byte_matches,
+        "filesystem_byte_matches": fs_matches,
+        "suppression_hash_present": has_hash,
+        "probe_abstentions": "VERIFIED_ABSTAINED_10_PROBES" if probe_passed else "FAILED_PROBES",
+    }
+
+
+def handoff_create(
+    namespace: str,
+    task_id: str,
+    goal: str,
+    completed_steps: List[str],
+    pending_steps: List[str],
+    open_questions: List[str],
+    created_by_agent: str = "agent_1",
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Wrap create_handoff for MCP clients."""
+    packet = create_handoff(
+        namespace=namespace,
+        task_id=task_id,
+        goal=goal,
+        completed_steps=completed_steps,
+        pending_steps=pending_steps,
+        open_questions=open_questions,
+        created_by_agent=created_by_agent,
+        memory_root=memory_root,
+    )
+    return packet.model_dump()
+
+
+def handoff_get(
+    namespace: str,
+    task_id: str,
+    memory_root: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Wrap get_handoff for MCP clients."""
+    return get_handoff(
+        namespace=namespace,
+        task_id=task_id,
+        memory_root=memory_root,
+    )

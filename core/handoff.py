@@ -16,9 +16,11 @@ spec.loader.exec_module(mod)
 create_handoff = mod.create_handoff
 get_handoff = mod.get_handoff
 count_tokens = mod.count_tokens
+_resolve_memory_root = mod._resolve_memory_root
 
 __all__ = [
     "create_handoff",
     "get_handoff",
     "count_tokens",
+    "_resolve_memory_root",
 ]
