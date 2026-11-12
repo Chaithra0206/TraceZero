@@ -1,8 +1,11 @@
+import sqlite3
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastembed import TextEmbedding
 from core.contracts import ClaimRecord, ClaimStatus, DeletionReceipt, SourceRecord, TrustTier
 from core.forget import compute_fact_hmac, forget_target
 from core.okf_compiler import compile_namespace_okf
+from core.predicates import is_single_valued
 from core.schema import ShardManager, serialize_f32
 
 # Singleton embedding model so it only loads once per process
@@ -155,3 +158,125 @@ class MemoryStore:
     def forget(self, namespace: str, target_query: str) -> DeletionReceipt:
         q_vec = embed_text(target_query)
         return forget_target(self.sm, namespace, target_query, query_embedding=q_vec)
+
+    # --- 6. MCP / DASHBOARD / EVAL EXTENSIONS ---
+    def get_claim_history(
+        self, namespace: str, subject: str, predicate: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Return all claims (active, superseded, disputed, quarantined) ordered by valid_from ASC."""
+        canon_subj = self.resolve_entity(namespace, subject)
+        with self.sm.get_connection(namespace) as conn:
+            if predicate is not None:
+                rows = conn.execute(
+                    """SELECT c.*, s.file_path, s.origin, s.trust_tier
+                       FROM claims_index c
+                       JOIN sources_index s ON c.source_id = s.source_id
+                       WHERE c.subject = ? AND c.predicate = ?
+                         AND c.status IN ('active', 'superseded', 'disputed', 'quarantined')
+                       ORDER BY c.valid_from ASC""",
+                    (canon_subj, predicate.lower().strip()),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT c.*, s.file_path, s.origin, s.trust_tier
+                       FROM claims_index c
+                       JOIN sources_index s ON c.source_id = s.source_id
+                       WHERE c.subject = ?
+                         AND c.status IN ('active', 'superseded', 'disputed', 'quarantined')
+                       ORDER BY c.valid_from ASC""",
+                    (canon_subj,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def explain_claim(self, namespace: str, claim_id: str) -> Dict[str, Any]:
+        """Return full claim provenance, lineage, source metadata, and exact L2 byte-span quote."""
+        with self.sm.get_connection(namespace) as conn:
+            row = conn.execute(
+                """SELECT c.*, s.file_path, s.sha256_hash, s.origin, s.trust_tier,
+                          s.created_at AS source_created_at,
+                          l.vec_rowid, l.fts_rowid
+                   FROM claims_index c
+                   JOIN sources_index s ON c.source_id = s.source_id
+                   LEFT JOIN lineage_index l ON c.claim_id = l.claim_id
+                   WHERE c.claim_id = ?""",
+                (claim_id,),
+            ).fetchone()
+        if not row:
+            return {}
+        info = dict(row)
+        info["exact_quote"] = self.read_verified_span(
+            namespace, info["file_path"], info["byte_start"], info["byte_end"]
+        )
+        return info
+
+    def list_quarantined(self, namespace: str) -> List[Dict[str, Any]]:
+        """Return all quarantined or disputed claims with source metadata and exact quote spans."""
+        with self.sm.get_connection(namespace) as conn:
+            rows = conn.execute(
+                """SELECT c.*, s.file_path, s.sha256_hash, s.origin, s.trust_tier
+                   FROM claims_index c
+                   JOIN sources_index s ON c.source_id = s.source_id
+                   WHERE c.status IN ('quarantined', 'disputed')
+                   ORDER BY c.valid_from DESC"""
+            ).fetchall()
+        results: List[Dict[str, Any]] = []
+        for r in rows:
+            item = dict(r)
+            item["exact_quote"] = self.read_verified_span(
+                namespace, item["file_path"], item["byte_start"], item["byte_end"]
+            )
+            results.append(item)
+        return results
+
+    def confirm_quarantined_claim(self, namespace: str, claim_id: str) -> bool:
+        """Promote a quarantined or disputed claim to ACTIVE, superseding prior single-valued claims."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self.sm.get_connection(namespace) as conn:
+            target = conn.execute(
+                "SELECT * FROM claims_index WHERE claim_id = ? AND status IN ('quarantined', 'disputed')",
+                (claim_id,),
+            ).fetchone()
+            if not target:
+                return False
+
+            subj = target["subject"]
+            pred = target["predicate"]
+
+            if is_single_valued(pred):
+                conn.execute(
+                    """UPDATE claims_index
+                       SET status = ?, valid_to = ?
+                       WHERE subject = ? AND predicate = ? AND status = 'active' AND claim_id != ?""",
+                    (ClaimStatus.SUPERSEDED.value, now, subj, pred, claim_id),
+                )
+
+            conn.execute(
+                "UPDATE claims_index SET status = ?, valid_to = NULL WHERE claim_id = ?",
+                (ClaimStatus.ACTIVE.value, claim_id),
+            )
+            conn.commit()
+
+        compile_namespace_okf(self.sm, namespace)
+        return True
+
+    def run_readonly_sql(
+        self, namespace: str, sql_query: str, params: tuple = ()
+    ) -> List[Dict[str, Any]]:
+        """Execute a validated read-only SELECT query against the namespace SQLite shard."""
+        stripped = sql_query.strip()
+        if not stripped.upper().startswith("SELECT"):
+            raise ValueError("Only read-only SELECT queries are permitted.")
+
+        # Ensure shard & tables exist before opening read-only URI connection
+        init_conn = self.sm.get_connection(namespace)
+        init_conn.close()
+
+        db_path = (self.sm.get_shard_dir(namespace) / "index.sqlite").resolve()
+        ro_conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        ro_conn.row_factory = sqlite3.Row
+        try:
+            ro_conn.execute("PRAGMA query_only = ON;")
+            rows = ro_conn.execute(stripped, params).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            ro_conn.close()
