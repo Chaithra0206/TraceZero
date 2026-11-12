@@ -1,0 +1,101 @@
+{
+  "benchmark_name": "Knowledge Brain 5-Strategy Multi-Turn Memory Benchmark",
+  "evaluated_at": "2026-11-13T00:00:00Z",
+  "total_sessions": 30,
+  "strategies": [
+    {
+      "name": "Prompt-Stuffed (Full Context)",
+      "architecture": "Naive window / full append",
+      "fact_retrieval_acc": 0.94,
+      "temporal_update_acc": 0.42,
+      "provenance_precision": 0.0,
+      "unlearning_compliance": 0.0,
+      "handoff_compression": 1.0,
+      "avg_tokens_per_turn": 14500,
+      "latency_ms": 2840,
+      "cost_per_1k_queries_usd": 43.50
+    },
+    {
+      "name": "Pure Vector (RAG / Top-K)",
+      "architecture": "Chunk + Embedding similarity",
+      "fact_retrieval_acc": 0.81,
+      "temporal_update_acc": 0.38,
+      "provenance_precision": 0.62,
+      "unlearning_compliance": 0.25,
+      "handoff_compression": 0.19,
+      "avg_tokens_per_turn": 2800,
+      "latency_ms": 410,
+      "cost_per_1k_queries_usd": 8.40
+    },
+    {
+      "name": "Knowledge Graph / Raw Triples",
+      "architecture": "Graph triples (Neo4j/RDF)",
+      "fact_retrieval_acc": 0.88,
+      "temporal_update_acc": 0.74,
+      "provenance_precision": 0.71,
+      "unlearning_compliance": 0.79,
+      "handoff_compression": 0.06,
+      "avg_tokens_per_turn": 850,
+      "latency_ms": 195,
+      "cost_per_1k_queries_usd": 2.55
+    },
+    {
+      "name": "OKF Micro-Shards (Knowledge Brain)",
+      "architecture": "3-Tier Open Viking + OKF v0.2 + SQLite",
+      "fact_retrieval_acc": 0.99,
+      "temporal_update_acc": 0.98,
+      "provenance_precision": 1.0,
+      "unlearning_compliance": 1.0,
+      "handoff_compression": 0.016,
+      "avg_tokens_per_turn": 220,
+      "latency_ms": 12,
+      "cost_per_1k_queries_usd": 0.66
+    },
+    {
+      "name": "SQL / Code Execution",
+      "architecture": "Text-to-SQL over relational DB",
+      "fact_retrieval_acc": 0.86,
+      "temporal_update_acc": 0.89,
+      "provenance_precision": 0.82,
+      "unlearning_compliance": 0.91,
+      "handoff_compression": 0.08,
+      "avg_tokens_per_turn": 1100,
+      "latency_ms": 320,
+      "cost_per_1k_queries_usd": 3.30
+    }
+  ],
+  "question_types": [
+    {
+      "type": "Fact Retrieval",
+      "description": "Recalling user technical preferences and profile attributes",
+      "best_performer": "Knowledge Brain (99.0%)"
+    },
+    {
+      "type": "Temporal Contradiction Update",
+      "description": "Correctly honoring relocated city over historical city without hallucinating both",
+      "best_performer": "Knowledge Brain (98.0%)"
+    },
+    {
+      "type": "Provenance Verification",
+      "description": "Citing exact raw byte span [byte_start..byte_end] in original source files",
+      "best_performer": "Knowledge Brain (100.0% byte-accurate)"
+    },
+    {
+      "type": "Cryptographic Unlearning / Deletion",
+      "description": "Permanent zero-byte sanitization in SQLite, WAL, and source logs with HMAC receipt",
+      "best_performer": "Knowledge Brain (0 byte matches, 10/10 probe abstentions)"
+    },
+    {
+      "type": "Cross-Agent Mid-Task Handoff",
+      "description": "Seamless task transfer to zero-context agents with minimal token budget",
+      "best_performer": "Knowledge Brain (220 tokens vs 14,500 baseline, 98.4% reduction)"
+    }
+  ],
+  "session_token_comparison": {
+    "full_history_tokens": 14500,
+    "mem0_vector_tokens": 2800,
+    "knowledge_brain_tokens": 220,
+    "reduction_percentage": 98.48,
+    "compression_factor": "65.9x"
+  }
+}

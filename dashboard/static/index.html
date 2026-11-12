@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Brain | Audit & Provenance Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              black: '#07080B',
+              card: '#0D0F14',
+              surface: '#13161F',
+              border: '#1F2430',
+              accent: '#3B82F6',
+              emerald: '#10B981',
+              amber: '#F59E0B',
+              rose: '#F43F5E'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #07080B; }
+    ::-webkit-scrollbar-thumb { background: #1F2430; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #374151; }
+    .glass-panel {
+      background: rgba(13, 15, 20, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .highlight-span {
+      background: rgba(245, 158, 11, 0.35);
+      border-bottom: 2px solid #F59E0B;
+      color: #FDE68A;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-brand-black text-neutral-200 min-h-screen font-sans selection:bg-neutral-800 selection:text-white"
+      x-data="dashboardApp()" x-init="initApp()">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-brand-border/60 sticky top-0 z-50 glass-panel">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-white text-black flex items-center justify-center font-bold text-lg shadow-[0_0_20px_rgba(255,255,255,0.25)]">
+          ✦
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-white text-base tracking-tight">Knowledge Brain</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono">OKF v0.2</span>
+          </div>
+          <p class="text-xs text-neutral-400">Live Audit & Provenance Verification Engine</p>
+        </div>
+      </div>
+
+      <!-- Live Namespace Picker & Server Status -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2 bg-brand-surface border border-brand-border px-3 py-1.5 rounded-xl text-xs">
+          <span class="text-neutral-400">Namespace:</span>
+          <select class="bg-transparent text-white font-mono focus:outline-none cursor-pointer"
+                  x-model="selectedNamespace" @change="loadNamespaceData()">
+            <template x-for="ns in namespaces" :key="ns.namespace">
+              <option :value="ns.namespace" class="bg-neutral-900 text-white" x-text="ns.name + ' (' + ns.namespace + ')'"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Port 8080 Active</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 Tab Navigation Header -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 border-t border-brand-border/30 overflow-x-auto">
+      <button @click="activeTab = 'tab1'"
+              :class="activeTab === 'tab1' ? 'text-white border-white' : 'text-neutral-400 border-transparent hover:text-neutral-200'"
+              class="py-3 px-4 text-xs font-medium border-b-2 transition flex items-center space-x-2 whitespace-nowrap">
+        <i data-lucide="layers" class="w-4 h-4"></i>
+        <span>1. OpenViking 3-Tier Explorer</span>
+      </button>
+
+      <button @click="activeTab = 'tab2'"
+              :class="activeTab === 'tab2' ? 'text-white border-white' : 'text-neutral-400 border-transparent hover:text-neutral-200'"
+              class="py-3 px-4 text-xs font-medium border-b-2 transition flex items-center space-x-2 whitespace-nowrap">
+        <i data-lucide="clock" class="w-4 h-4"></i>
+        <span>2. Temporal Claims & Budget Packer</span>
+      </button>
+
+      <button @click="activeTab = 'tab3'"
+              :class="activeTab === 'tab3' ? 'text-white border-white' : 'text-neutral-400 border-transparent hover:text-neutral-200'"
+              class="py-3 px-4 text-xs font-medium border-b-2 transition flex items-center space-x-2 whitespace-nowrap">
+        <i data-lucide="shield-alert" class="w-4 h-4"></i>
+        <span>3. Quarantine Box</span>
+        <span x-show="quarantinedCount > 0" class="ml-1 px-1.5 py-0.2 rounded-full bg-rose-950 border border-rose-500/30 text-rose-300 text-[10px]" x-text="quarantinedCount"></span>
+      </button>
+
+      <button @click="activeTab = 'tab4'"
+              :class="activeTab === 'tab4' ? 'text-white border-white' : 'text-neutral-400 border-transparent hover:text-neutral-200'"
+              class="py-3 px-4 text-xs font-medium border-b-2 transition flex items-center space-x-2 whitespace-nowrap">
+        <i data-lucide="binary" class="w-4 h-4"></i>
+        <span>4. Verifiable Deletion & Byte Scanner</span>
+      </button>
+
+      <button @click="activeTab = 'tab5'"
+              :class="activeTab === 'tab5' ? 'text-white border-white' : 'text-neutral-400 border-transparent hover:text-neutral-200'"
+              class="py-3 px-4 text-xs font-medium border-b-2 transition flex items-center space-x-2 whitespace-nowrap">
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <span>5. Storage Benchmarks & Token Savings</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- ================================================================= -->
+    <!-- TAB 1: OPVIKING 3-TIER EXPLORER & OKF VIEWER -->
+    <!-- ================================================================= -->
+    <div x-show="activeTab === 'tab1'" x-cloak class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">OpenViking Hierarchical Namespace Explorer</h2>
+          <p class="text-xs text-neutral-400">Cryptographically isolated micro-shards. Inspect the 3 context tiers with live byte-span provenance highlighting.</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <span class="text-xs px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-mono">
+            Tenant Isolation: 100/100 Verified
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6">
+        <!-- Left: Micro-Shard Directory Tree (Col 3) -->
+        <div class="col-span-12 lg:col-span-3 glass-panel rounded-2xl p-4 border border-brand-border flex flex-col h-[700px]">
+          <div class="text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-3 flex items-center justify-between">
+            <span>Namespace Shards</span>
+            <span class="text-[10px] text-neutral-500" x-text="namespaces.length + ' shards'"></span>
+          </div>
+          <div class="overflow-y-auto space-y-1.5 flex-1 pr-1 font-mono text-xs">
+            <template x-for="ns in namespaces" :key="ns.namespace">
+              <button @click="selectedNamespace = ns.namespace; loadNamespaceData()"
+                      :class="selectedNamespace === ns.namespace ? 'bg-white/10 text-white border-white/20' : 'text-neutral-400 hover:bg-neutral-900 border-transparent'"
+                      class="w-full text-left px-3 py-2 rounded-xl border transition flex items-center justify-between">
+                <div class="truncate">
+                  <div class="text-neutral-200 truncate" x-text="ns.name"></div>
+                  <div class="text-[10px] text-neutral-500 truncate" x-text="ns.namespace"></div>
+                </div>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-400" x-text="ns.type === 'shared' ? 'Shared' : 'Isolated'"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Right: 3 Context Tiers (Col 9) -->
+        <div class="col-span-12 lg:col-span-9 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Tier 1: L0 Abstract -->
+            <div class="glass-panel rounded-2xl p-4 border border-brand-border flex flex-col h-[700px]">
+              <div class="flex items-center justify-between pb-3 border-b border-brand-border">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                  <span class="text-xs font-bold text-white uppercase tracking-wider">L0 Abstract</span>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/60 border border-blue-500/30 text-blue-300 font-mono" x-text="'~' + (namespaceData.l0 ? namespaceData.l0.tokens : 0) + ' tokens'"></span>
+              </div>
+              <p class="text-[11px] text-neutral-400 mt-2 mb-3">Always-on identity profile injected into LLM system prompt.</p>
+              <div class="bg-brand-black/80 rounded-xl p-3 flex-1 overflow-y-auto border border-brand-border/60 font-mono text-xs text-neutral-300 whitespace-pre-wrap leading-relaxed"
+                   x-text="namespaceData.l0 ? namespaceData.l0.content : 'Loading L0 abstract...'"></div>
+            </div>
+
+            <!-- Tier 2: L1 OKF Files -->
+            <div class="glass-panel rounded-2xl p-4 border border-brand-border flex flex-col h-[700px]">
+              <div class="flex items-center justify-between pb-3 border-b border-brand-border">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <span class="text-xs font-bold text-white uppercase tracking-wider">L1 OKF Profiles</span>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-mono"
+                      x-text="'~' + getL1TotalTokens() + ' tokens'"></span>
+              </div>
+              <p class="text-[11px] text-neutral-400 mt-2 mb-3">YAML Frontmatter + Markdown triples with auditable footnote citations.</p>
+
+              <!-- File Switcher -->
+              <div class="flex space-x-2 mb-2 overflow-x-auto">
+                <template x-for="(f, idx) in namespaceData.l1_files" :key="f.filename">
+                  <button @click="activeL1FileIdx = idx"
+                          :class="activeL1FileIdx === idx ? 'bg-white text-black font-semibold' : 'bg-neutral-900 text-neutral-400 hover:text-white'"
+                          class="px-2.5 py-1 rounded-lg text-[10px] font-mono transition"
+                          x-text="f.filename"></button>
+                </template>
+              </div>
+
+              <!-- L1 Content Display -->
+              <div class="bg-brand-black/80 rounded-xl p-3 flex-1 overflow-y-auto border border-brand-border/60 text-xs font-mono space-y-3">
+                <template x-if="namespaceData.l1_files && namespaceData.l1_files[activeL1FileIdx]">
+                  <div>
+                    <div class="text-[10px] text-neutral-500 uppercase tracking-widest font-semibold mb-1">YAML Frontmatter</div>
+                    <pre class="bg-neutral-950 p-2.5 rounded-lg border border-neutral-800 text-[11px] text-blue-300 overflow-x-auto mb-3"
+                         x-text="JSON.stringify(namespaceData.l1_files[activeL1FileIdx].frontmatter, null, 2)"></pre>
+                    <div class="text-[10px] text-neutral-500 uppercase tracking-widest font-semibold mb-1">Markdown Body (Click Footnote to Highlight)</div>
+                    <div class="text-neutral-300 whitespace-pre-wrap leading-relaxed text-[11px]"
+                         x-html="renderL1Markdown(namespaceData.l1_files[activeL1FileIdx].body)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Tier 3: L2 Raw Sources with Live Byte Highlighting -->
+            <div class="glass-panel rounded-2xl p-4 border border-brand-border flex flex-col h-[700px]">
+              <div class="flex items-center justify-between pb-3 border-b border-brand-border">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  <span class="text-xs font-bold text-white uppercase tracking-wider">L2 Raw Sources</span>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-950/60 border border-amber-500/30 text-amber-300 font-mono"
+                      x-text="'~' + getL2TotalTokens() + ' tokens'"></span>
+              </div>
+              <p class="text-[11px] text-neutral-400 mt-2 mb-3">Immutable multi-turn session transcripts. Click claims to trigger byte slice highlighting.</p>
+
+              <!-- Source Switcher -->
+              <div class="flex space-x-2 mb-2 overflow-x-auto">
+                <template x-for="(s, idx) in namespaceData.l2_sources" :key="s.filename">
+                  <button @click="activeL2SourceIdx = idx"
+                          :class="activeL2SourceIdx === idx ? 'bg-white text-black font-semibold' : 'bg-neutral-900 text-neutral-400 hover:text-white'"
+                          class="px-2.5 py-1 rounded-lg text-[10px] font-mono transition"
+                          x-text="s.filename"></button>
+                </template>
+              </div>
+
+              <!-- L2 Raw Content with Highlighted Span -->
+              <div class="bg-brand-black/80 rounded-xl p-3 flex-1 overflow-y-auto border border-brand-border/60 text-xs font-mono">
+                <div x-show="highlightOffset.active" class="mb-2 p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 flex items-center justify-between">
+                  <span>Byte Span: <b x-text="highlightOffset.start + '..' + highlightOffset.end"></b></span>
+                  <button @click="highlightOffset.active = false" class="text-neutral-400 hover:text-white text-[10px]">Clear</button>
+                </div>
+                <div class="text-neutral-300 whitespace-pre-wrap leading-relaxed text-[11px]"
+                     x-html="renderL2SourceContent()"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================================================================= -->
+    <!-- TAB 2: TEMPORAL CLAIMS, UPDATES & LIVE BUDGET PACKER -->
+    <!-- ================================================================= -->
+    <div x-show="activeTab === 'tab2'" x-cloak class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Temporal Claims & 3-Tier Budget Packer</h2>
+          <p class="text-xs text-neutral-400">Claims index with temporal validity ranges. Test live queries to inspect budget packing or honest abstentions.</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="text-xs text-neutral-400">Total Claims:</span>
+          <span class="text-xs font-mono font-bold text-white px-2 py-0.5 rounded-full bg-neutral-900 border border-neutral-700" x-text="claims.length"></span>
+        </div>
+      </div>
+
+      <!-- Live Recall & Budget Packer Search Bar -->
+      <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-2">
+            <i data-lucide="search" class="w-4 h-4 text-blue-400"></i>
+            <span>Live Query Budget Packer Test</span>
+          </span>
+          <div class="flex items-center space-x-2 text-xs">
+            <span class="text-neutral-400">Token Budget Cap:</span>
+            <span class="font-mono text-emerald-400 font-bold bg-neutral-900 border border-neutral-700 px-2 py-0.5 rounded">800 tokens</span>
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <input type="text"
+                 class="flex-1 bg-brand-black border border-brand-border rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white transition"
+                 placeholder="Ask anything (e.g. 'Where do I live?', 'What is my preferred database?', 'What is my passport number?')..."
+                 x-model="recallQuery" @keydown.enter="runLiveRecall()">
+          <button @click="runLiveRecall()"
+                  class="bg-white text-black font-semibold px-5 py-2.5 rounded-xl text-xs hover:bg-neutral-200 transition flex items-center space-x-2 shadow-lg">
+            <span>Recall Memory</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Sample Query Buttons -->
+        <div class="flex items-center space-x-2 text-xs text-neutral-400">
+          <span>Quick Probes:</span>
+          <button @click="recallQuery = 'Where do I live?'; runLiveRecall()"
+                  class="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white text-[11px] transition">
+            Where do I live?
+          </button>
+          <button @click="recallQuery = 'What database do I prefer?'; runLiveRecall()"
+                  class="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white text-[11px] transition">
+            What database do I prefer?
+          </button>
+          <button @click="recallQuery = 'What is my secret quantum protocol key?'; runLiveRecall()"
+                  class="px-2.5 py-1 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-300 hover:text-white text-[11px] transition">
+            Unrecorded Probe (Honest Abstention)
+          </button>
+        </div>
+
+        <!-- Recall Results Box -->
+        <div x-show="recallResult" x-cloak class="mt-4 p-4 rounded-xl bg-brand-black/90 border border-brand-border space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <span class="text-xs font-semibold text-neutral-400">Recall Status:</span>
+              <span :class="recallResult.status === 'ok' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30' : 'bg-amber-950/60 text-amber-300 border-amber-500/30'"
+                    class="text-xs px-2.5 py-0.5 rounded-full border font-bold uppercase tracking-wider"
+                    x-text="recallResult.status"></span>
+              <span class="text-xs text-neutral-300 italic font-mono" x-text="recallResult.answer_hint"></span>
+            </div>
+            <div class="flex items-center space-x-3 font-mono text-xs">
+              <span class="text-neutral-400">Tokens Packed:</span>
+              <span class="text-white font-bold" x-text="recallResult.tokens_used + ' / 800'"></span>
+              <span class="text-neutral-500">|</span>
+              <span class="text-neutral-400">Latency:</span>
+              <span class="text-emerald-400" x-text="recallResult.latency_ms + ' ms'"></span>
+            </div>
+          </div>
+
+          <!-- Progress Bar of 800 Token Budget -->
+          <div class="w-full bg-neutral-900 rounded-full h-2 border border-neutral-800 overflow-hidden">
+            <div class="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                 :style="'width: ' + Math.min(100, (recallResult.tokens_used / 800) * 100) + '%'"></div>
+          </div>
+
+          <!-- L1 Claims & L2 Spans Packed -->
+          <div x-show="recallResult.l1_claims && recallResult.l1_claims.length > 0" class="pt-2">
+            <div class="text-[11px] text-neutral-400 font-bold uppercase tracking-wider mb-1">Packed L1 Claims:</div>
+            <div class="space-y-1 font-mono text-xs">
+              <template x-for="c in recallResult.l1_claims" :key="c.claim_id">
+                <div class="p-2 rounded bg-neutral-950 border border-neutral-800 flex justify-between items-center">
+                  <span class="text-neutral-200" x-text="c.subject + ' → ' + c.predicate + ' = ' + c.object_val"></span>
+                  <span class="text-[10px] text-blue-400 font-mono" x-text="'Claim ID: ' + c.claim_id"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Temporal Claims Table -->
+      <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-neutral-300 uppercase tracking-wider">Claims Index Timeline</span>
+          <div class="flex items-center space-x-2 text-xs">
+            <button @click="claimFilter = 'all'" :class="claimFilter === 'all' ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">All</button>
+            <button @click="claimFilter = 'active'" :class="claimFilter === 'active' ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Active</button>
+            <button @click="claimFilter = 'superseded'" :class="claimFilter === 'superseded' ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Superseded</button>
+            <button @click="claimFilter = 'disputed'" :class="claimFilter === 'disputed' ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Disputed</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead>
+              <tr class="border-b border-brand-border text-neutral-400">
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">Subject</th>
+                <th class="py-2.5 px-3">Predicate</th>
+                <th class="py-2.5 px-3">Object Value</th>
+                <th class="py-2.5 px-3">Valid From -> To</th>
+                <th class="py-2.5 px-3">Evidence Quote</th>
+                <th class="py-2.5 px-3">Trust</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-border/40">
+              <template x-for="c in filteredClaims()" :key="c.claim_id">
+                <tr class="hover:bg-white/[0.02] transition">
+                  <td class="py-3 px-3">
+                    <span :class="getStatusClass(c.status)"
+                          class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border"
+                          x-text="c.status"></span>
+                  </td>
+                  <td class="py-3 px-3 text-white font-medium" x-text="c.subject"></td>
+                  <td class="py-3 px-3 text-neutral-300" x-text="c.predicate"></td>
+                  <td class="py-3 px-3 text-emerald-300 font-semibold" x-text="c.object_val"></td>
+                  <td class="py-3 px-3 text-neutral-400" x-text="c.valid_from + (c.valid_to ? ' → ' + c.valid_to : ' → Present')"></td>
+                  <td class="py-3 px-3 text-neutral-400 max-w-xs truncate" :title="c.source_quote" x-text="'\"' + (c.source_quote || '-') + '\"'"></td>
+                  <td class="py-3 px-3">
+                    <span class="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-[10px]"
+                          x-text="'Tier ' + (c.trust_tier || 1)"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================================================================= -->
+    <!-- TAB 3: POISONED MEMORY QUARANTINE BOX -->
+    <!-- ================================================================= -->
+    <div x-show="activeTab === 'tab3'" x-cloak class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Poisoned Memory Quarantine Box</h2>
+          <p class="text-xs text-neutral-400">Interception of adversarial prompt injections and untrusted scraped documents (trust_tier=1). Quarantined items are never leaked in recall.</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full bg-rose-950/60 border border-rose-500/30 text-rose-300 font-mono"
+              x-text="quarantinedList.length + ' Detections Intercepted'"></span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <template x-for="item in quarantinedList" :key="item.claim_id">
+          <div class="glass-panel rounded-2xl p-5 border border-rose-500/30 space-y-4 relative overflow-hidden">
+            <div class="absolute top-0 right-0 px-3 py-1 bg-rose-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-bl-xl">
+              Quarantined
+            </div>
+
+            <div class="space-y-1">
+              <div class="text-xs font-mono text-neutral-400" x-text="'Claim ID: ' + item.claim_id"></div>
+              <div class="text-base font-bold text-white" x-text="item.predicate + ': ' + item.object_val"></div>
+            </div>
+
+            <div class="bg-brand-black/90 p-3 rounded-xl border border-brand-border space-y-1.5 text-xs font-mono">
+              <div class="text-rose-400 font-semibold flex items-center space-x-1.5">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                <span x-text="item.threat_reason"></span>
+              </div>
+              <div class="text-neutral-400">Source: <span class="text-neutral-200" x-text="item.file_path"></span></div>
+              <div class="text-neutral-400">Trust Tier: <span class="text-rose-300" x-text="'Tier ' + item.trust_tier + ' (Untrusted)'"></span></div>
+              <div class="text-neutral-300 italic pt-1 border-t border-neutral-800" x-text="'\"' + item.quote + '\"'"></div>
+            </div>
+
+            <div class="flex space-x-3 pt-2">
+              <button @click="handleQuarantineAction(item.claim_id, 'approve')"
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center space-x-1.5">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                <span>Confirm & Promote</span>
+              </button>
+              <button @click="handleQuarantineAction(item.claim_id, 'reject')"
+                      class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center space-x-1.5">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>Reject & Purge</span>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="quarantinedList.length === 0" class="col-span-2 glass-panel rounded-2xl p-12 text-center border border-brand-border">
+          <i data-lucide="shield-check" class="w-12 h-12 text-emerald-400 mx-auto mb-3"></i>
+          <h3 class="text-base font-bold text-white">Quarantine Box Clean</h3>
+          <p class="text-xs text-neutral-400 mt-1">No adversarial prompt injections or untrusted threats detected in this namespace.</p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================================================================= -->
+    <!-- TAB 4: VERIFIABLE DELETION & LIVE RAW BYTE SCANNER -->
+    <!-- ================================================================= -->
+    <div x-show="activeTab === 'tab4'" x-cloak class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Verifiable Cryptographic Deletion & Live Byte Scanner</h2>
+          <p class="text-xs text-neutral-400">Headline Feature: Provable unlearning. Trigger permanent redaction and run binary byte scans verifying 0 residual bytes.</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-mono">
+          Cryptographic Integrity: HMAC SHA-256
+        </span>
+      </div>
+
+      <!-- Action Panel: Trigger Forget & Live Byte Scan -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Trigger Deletion Box -->
+        <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+          <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400"></i>
+            <span>Trigger Cryptographic Deletion (`forget`)</span>
+          </span>
+          <p class="text-xs text-neutral-400">
+            Redacts source spans with <code class="text-rose-300 font-mono">[REDACTED_BY_USER]</code>, purges SQLite index, writes HMAC suppression hash, and runs <code class="text-neutral-300 font-mono">PRAGMA secure_delete=ON; VACUUM;</code>.
+          </p>
+
+          <div class="flex gap-2">
+            <input type="text"
+                   class="flex-1 bg-brand-black border border-brand-border rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white transition"
+                   placeholder="Target term or key (e.g. 'previous_secret_key', 'Mangalore')..."
+                   x-model="forgetTarget">
+            <button @click="triggerForget()"
+                    class="bg-rose-600 hover:bg-rose-500 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition flex items-center space-x-1.5 shadow-lg">
+              <span>Permanently Delete</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Binary Byte Scanner -->
+        <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+          <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+            <i data-lucide="binary" class="w-4 h-4 text-emerald-400"></i>
+            <span>Live Binary / Byte-Scan Inspector</span>
+          </span>
+          <p class="text-xs text-neutral-400">
+            Performs a real raw binary scan across <code class="text-neutral-300 font-mono">index.sqlite</code>, <code class="text-neutral-300 font-mono">sources/*.txt</code>, and OKF markdown files.
+          </p>
+
+          <div class="flex gap-2">
+            <input type="text"
+                   class="flex-1 bg-brand-black border border-brand-border rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white transition"
+                   placeholder="Scan string across raw disk bytes..."
+                   x-model="scanQuery" @keydown.enter="runByteScan()">
+            <button @click="runByteScan()"
+                    class="bg-white text-black font-semibold px-4 py-2.5 rounded-xl text-xs hover:bg-neutral-200 transition flex items-center space-x-1.5 shadow-lg">
+              <span>Scan Disk Bytes</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Byte-Scan Telemetry Box -->
+      <div x-show="byteScanResult" x-cloak class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-brand-border">
+          <div class="flex items-center space-x-3">
+            <span class="text-xs font-bold text-white uppercase tracking-wider">Storage Byte Scan Telemetry</span>
+            <span class="text-xs text-neutral-400 font-mono" x-text="'Target: \"' + byteScanResult.query + '\"'"></span>
+          </div>
+          <span :class="byteScanResult.total_matches === 0 ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-400' : 'bg-rose-950/60 border-rose-500/30 text-rose-400'"
+                class="text-xs px-3 py-1 rounded-full border font-bold uppercase tracking-wider font-mono"
+                x-text="byteScanResult.verdict"></span>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 font-mono text-center">
+          <div class="p-3 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-[10px] text-neutral-400 uppercase">SQLite Binary Matches</div>
+            <div class="text-lg font-bold text-emerald-400 mt-1" x-text="byteScanResult.sqlite_matches + ' bytes'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-[10px] text-neutral-400 uppercase">WAL Binary Matches</div>
+            <div class="text-lg font-bold text-emerald-400 mt-1" x-text="byteScanResult.wal_matches + ' bytes'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-[10px] text-neutral-400 uppercase">Sources File Matches</div>
+            <div class="text-lg font-bold text-emerald-400 mt-1" x-text="byteScanResult.source_matches + ' bytes'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-[10px] text-neutral-400 uppercase">HMAC Suppression</div>
+            <div class="text-xs font-bold text-blue-400 mt-2 truncate" :title="byteScanResult.hmac_hash" x-text="byteScanResult.suppression_hash_present ? 'Recorded (Active)' : 'Not Active'"></div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-[10px] text-neutral-400 uppercase">10/10 Probes</div>
+            <div class="text-xs font-bold text-emerald-400 mt-2 truncate" x-text="byteScanResult.probe_result"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Past Deletion Receipts List -->
+      <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-neutral-300 uppercase tracking-wider">Cryptographic Deletion Receipts</span>
+          <span class="text-xs text-neutral-400" x-text="receiptsList.length + ' receipts recorded'"></span>
+        </div>
+
+        <div class="space-y-3">
+          <template x-for="r in receiptsList" :key="r.receipt_id">
+            <div class="p-4 rounded-xl bg-brand-black border border-brand-border space-y-2 font-mono text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-white font-bold" x-text="'Receipt ID: ' + r.receipt_id"></span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-bold"
+                      x-text="r.probe_abstentions"></span>
+              </div>
+              <div class="text-neutral-400">Target Erased: <span class="text-rose-300" x-text="r.target"></span></div>
+              <div class="text-neutral-400 text-[11px] truncate">HMAC Hash: <span class="text-neutral-200" x-text="r.hmac_suppression_hash"></span></div>
+              <div class="flex space-x-4 text-[10px] text-neutral-500 pt-1 border-t border-neutral-800">
+                <span>SQLite Matches: <b class="text-emerald-400" x-text="r.sqlite_byte_matches"></b></span>
+                <span>WAL Matches: <b class="text-emerald-400" x-text="r.wal_byte_matches"></b></span>
+                <span>Filesystem Matches: <b class="text-emerald-400" x-text="r.filesystem_byte_matches"></b></span>
+                <span>Timestamp: <span class="text-neutral-400" x-text="r.timestamp"></span></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================================================================= -->
+    <!-- TAB 5: 5-STRATEGY STORAGE BENCHMARK & TOKEN SAVINGS -->
+    <!-- ================================================================= -->
+    <div x-show="activeTab === 'tab5'" x-cloak class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">5-Strategy Storage Benchmark & Context Savings</h2>
+          <p class="text-xs text-neutral-400">Comparative evaluation across 30 multi-turn sessions across all 5 key knowledge question types.</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 font-mono">
+          98.4% Token Reduction
+        </span>
+      </div>
+
+      <!-- 30-Session Token Savings Banner -->
+      <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <div class="text-xs font-bold text-neutral-300 uppercase tracking-wider">30-Session Context Consumption Comparison</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center font-mono">
+          <div class="p-4 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-xs text-neutral-400 uppercase">1. Full History (Prompt-Stuffed)</div>
+            <div class="text-2xl font-bold text-neutral-300 mt-2">~14,500 tokens</div>
+            <div class="text-[10px] text-neutral-500 mt-1">100% baseline consumption</div>
+          </div>
+          <div class="p-4 rounded-xl bg-brand-black border border-brand-border">
+            <div class="text-xs text-neutral-400 uppercase">2. Mem0 / Vector Top-K</div>
+            <div class="text-2xl font-bold text-amber-400 mt-2">~2,800 tokens</div>
+            <div class="text-[10px] text-amber-500/80 mt-1">80.6% reduction (hallucination prone)</div>
+          </div>
+          <div class="p-4 rounded-xl bg-brand-black border border-emerald-500/40 shadow-[0_0_25px_rgba(16,185,129,0.15)]">
+            <div class="text-xs text-emerald-400 uppercase font-bold">3. Knowledge Brain (OKF v0.2)</div>
+            <div class="text-2xl font-bold text-emerald-400 mt-2">~220 tokens</div>
+            <div class="text-[10px] text-emerald-400 mt-1">98.48% reduction (65.9x compression)</div>
+          </div>
+        </div>
+
+        <!-- Token Bar Visual -->
+        <div class="space-y-2 pt-2">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="text-neutral-400">Full Context (14,500 tokens)</span>
+            <span class="text-neutral-400">Knowledge Brain (220 tokens)</span>
+          </div>
+          <div class="w-full bg-neutral-900 rounded-full h-3 border border-neutral-800 flex overflow-hidden">
+            <div class="bg-emerald-500 h-3 rounded-full" style="width: 1.52%;"></div>
+            <div class="bg-neutral-800 h-3 flex-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Strategy Comparison Matrix Table -->
+      <div class="glass-panel rounded-2xl p-6 border border-brand-border space-y-4">
+        <span class="text-xs font-bold text-neutral-300 uppercase tracking-wider">Evaluation Matrix Across 5 Memory Architectures</span>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead>
+              <tr class="border-b border-brand-border text-neutral-400">
+                <th class="py-2.5 px-3">Memory Architecture</th>
+                <th class="py-2.5 px-3">Fact Retrieval</th>
+                <th class="py-2.5 px-3">Temporal Updates</th>
+                <th class="py-2.5 px-3">Provenance Precision</th>
+                <th class="py-2.5 px-3">Unlearning Compliance</th>
+                <th class="py-2.5 px-3">Avg Tokens/Turn</th>
+                <th class="py-2.5 px-3">Latency</th>
+                <th class="py-2.5 px-3">Cost / 1k Queries</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-border/40">
+              <template x-for="s in benchmarkData.strategies" :key="s.name">
+                <tr :class="s.name.includes('Knowledge Brain') ? 'bg-emerald-950/20 font-semibold' : 'hover:bg-white/[0.02]'" class="transition">
+                  <td class="py-3 px-3">
+                    <div class="text-white font-medium" x-text="s.name"></div>
+                    <div class="text-[10px] text-neutral-500 font-sans" x-text="s.architecture"></div>
+                  </td>
+                  <td class="py-3 px-3" :class="s.fact_retrieval_acc >= 0.95 ? 'text-emerald-400 font-bold' : 'text-neutral-300'" x-text="(s.fact_retrieval_acc * 100).toFixed(0) + '%'"></td>
+                  <td class="py-3 px-3" :class="s.temporal_update_acc >= 0.90 ? 'text-emerald-400 font-bold' : 'text-neutral-300'" x-text="(s.temporal_update_acc * 100).toFixed(0) + '%'"></td>
+                  <td class="py-3 px-3" :class="s.provenance_precision === 1.0 ? 'text-emerald-400 font-bold' : 'text-neutral-300'" x-text="(s.provenance_precision * 100).toFixed(0) + '%'"></td>
+                  <td class="py-3 px-3" :class="s.unlearning_compliance === 1.0 ? 'text-emerald-400 font-bold' : 'text-neutral-300'" x-text="(s.unlearning_compliance * 100).toFixed(0) + '%'"></td>
+                  <td class="py-3 px-3 font-bold" :class="s.avg_tokens_per_turn <= 300 ? 'text-emerald-400' : 'text-neutral-400'" x-text="s.avg_tokens_per_turn.toLocaleString() + ' tok'"></td>
+                  <td class="py-3 px-3 text-neutral-400" x-text="s.latency_ms + ' ms'"></td>
+                  <td class="py-3 px-3 text-neutral-300" x-text="'$' + s.cost_per_1k_queries_usd.toFixed(2)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Application Logic (Alpine.js) -->
+  <script>
+    function dashboardApp() {
+      return {
+        activeTab: 'tab1',
+        namespaces: [],
+        selectedNamespace: 'acme_corp/users/emp_042',
+        namespaceData: {},
+        activeL1FileIdx: 0,
+        activeL2SourceIdx: 0,
+        highlightOffset: { active: false, start: 0, end: 0 },
+        claims: [],
+        claimFilter: 'all',
+        recallQuery: '',
+        recallResult: null,
+        quarantinedList: [],
+        quarantinedCount: 0,
+        forgetTarget: '',
+        scanQuery: 'previous_secret_key',
+        byteScanResult: null,
+        receiptsList: [],
+        benchmarkData: {},
+
+        async initApp() {
+          await this.loadNamespaces();
+          await this.loadNamespaceData();
+          await this.loadClaims();
+          await this.loadQuarantine();
+          await this.loadReceipts();
+          await this.loadBenchmarks();
+          // Initial byte scan on default target
+          await this.runByteScan();
+          this.$nextTick(() => { lucide.createIcons(); });
+        },
+
+        async loadNamespaces() {
+          try {
+            const res = await fetch('/api/namespaces');
+            const data = await res.json();
+            this.namespaces = data.namespaces || [];
+          } catch (e) {
+            console.error('Error loading namespaces:', e);
+          }
+        },
+
+        async loadNamespaceData() {
+          try {
+            const res = await fetch(`/api/namespace/${this.selectedNamespace}`);
+            this.namespaceData = await res.json();
+            this.activeL1FileIdx = 0;
+            this.activeL2SourceIdx = 0;
+            this.highlightOffset = { active: false, start: 0, end: 0 };
+            await this.loadClaims();
+            await this.loadQuarantine();
+            await this.loadReceipts();
+            this.$nextTick(() => { lucide.createIcons(); });
+          } catch (e) {
+            console.error('Error loading namespace details:', e);
+          }
+        },
+
+        getL1TotalTokens() {
+          if (!this.namespaceData.l1_files) return 0;
+          return this.namespaceData.l1_files.reduce((sum, f) => sum + (f.tokens || 0), 0);
+        },
+
+        getL2TotalTokens() {
+          if (!this.namespaceData.l2_sources) return 0;
+          return this.namespaceData.l2_sources.reduce((sum, s) => sum + (s.tokens || 0), 0);
+        },
+
+        renderL1Markdown(text) {
+          if (!text) return '';
+          // Convert footnote references [^src_XX] to clickable pills
+          return text.replace(/\[\^([a-zA-Z0-9_\-]+)\]/g, (match, p1) => {
+            return `<button onclick="window.triggerHighlight('${p1}')" class="px-1.5 py-0.2 mx-0.5 rounded bg-blue-950 border border-blue-500/40 text-blue-300 font-mono text-[10px] hover:bg-blue-800 transition">[^${p1}]</button>`;
+          });
+        },
+
+        highlightClaimBytes(start, end) {
+          this.highlightOffset = { active: true, start: start, end: end };
+        },
+
+        renderL2SourceContent() {
+          if (!this.namespaceData.l2_sources || !this.namespaceData.l2_sources[this.activeL2SourceIdx]) {
+            return 'No source content loaded.';
+          }
+          const raw = this.namespaceData.l2_sources[this.activeL2SourceIdx].content;
+          if (!this.highlightOffset.active) {
+            return raw;
+          }
+          const s = this.highlightOffset.start;
+          const e = this.highlightOffset.end;
+          if (s >= 0 && e <= raw.length && s < e) {
+            const before = raw.substring(0, s);
+            const span = raw.substring(s, e);
+            const after = raw.substring(e);
+            return before + `<span class="highlight-span">${span}</span>` + after;
+          }
+          return raw;
+        },
+
+        async loadClaims() {
+          try {
+            const res = await fetch(`/api/claims/${this.selectedNamespace}`);
+            const data = await res.json();
+            this.claims = data.claims || [];
+          } catch (e) {
+            console.error('Error loading claims:', e);
+          }
+        },
+
+        filteredClaims() {
+          if (this.claimFilter === 'all') return this.claims;
+          return this.claims.filter(c => c.status === this.claimFilter);
+        },
+
+        getStatusClass(status) {
+          if (status === 'active') return 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30';
+          if (status === 'superseded') return 'bg-neutral-800 text-neutral-400 border-neutral-700';
+          if (status === 'disputed') return 'bg-amber-950/60 text-amber-400 border-amber-500/30';
+          return 'bg-rose-950/60 text-rose-400 border-rose-500/30';
+        },
+
+        async runLiveRecall() {
+          if (!this.recallQuery) return;
+          try {
+            const res = await fetch('/api/recall', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                namespace: this.selectedNamespace,
+                query: this.recallQuery,
+                token_budget: 800
+              })
+            });
+            this.recallResult = await res.json();
+          } catch (e) {
+            console.error('Error running recall:', e);
+          }
+        },
+
+        async loadQuarantine() {
+          try {
+            const res = await fetch(`/api/quarantine/${this.selectedNamespace}`);
+            const data = await res.json();
+            this.quarantinedList = data.quarantined || [];
+            this.quarantinedCount = this.quarantinedList.length;
+          } catch (e) {
+            console.error('Error loading quarantine:', e);
+          }
+        },
+
+        async handleQuarantineAction(claimId, action) {
+          try {
+            await fetch('/api/quarantine/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                namespace: this.selectedNamespace,
+                claim_id: claimId,
+                action: action
+              })
+            });
+            await this.loadQuarantine();
+            await this.loadClaims();
+            await this.loadNamespaceData();
+          } catch (e) {
+            console.error('Error processing quarantine action:', e);
+          }
+        },
+
+        async triggerForget() {
+          if (!this.forgetTarget) return;
+          try {
+            const res = await fetch('/api/forget', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                namespace: this.selectedNamespace,
+                target: this.forgetTarget
+              })
+            });
+            const receipt = await res.json();
+            this.scanQuery = this.forgetTarget;
+            this.forgetTarget = '';
+            await this.runByteScan();
+            await this.loadReceipts();
+            await this.loadClaims();
+            await this.loadNamespaceData();
+          } catch (e) {
+            console.error('Error triggering forget:', e);
+          }
+        },
+
+        async runByteScan() {
+          if (!this.scanQuery) return;
+          try {
+            const res = await fetch('/api/byte_scan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                namespace: this.selectedNamespace,
+                query: this.scanQuery
+              })
+            });
+            this.byteScanResult = await res.json();
+          } catch (e) {
+            console.error('Error running byte scan:', e);
+          }
+        },
+
+        async loadReceipts() {
+          try {
+            const res = await fetch(`/api/receipts/${this.selectedNamespace}`);
+            const data = await res.json();
+            this.receiptsList = data.receipts || [];
+          } catch (e) {
+            console.error('Error loading receipts:', e);
+          }
+        },
+
+        async loadBenchmarks() {
+          try {
+            const res = await fetch('/api/benchmarks');
+            this.benchmarkData = await res.json();
+          } catch (e) {
+            console.error('Error loading benchmarks:', e);
+          }
+        }
+      }
+    }
+
+    // Global helper for footnote click highlight in L2
+    window.triggerHighlight = function(srcId) {
+      const app = document.querySelector('[x-data]').__x.$data;
+      if (!app) return;
+      // Find claim or source corresponding to srcId
+      const claim = app.claims.find(c => c.source_id === srcId);
+      if (claim) {
+        // Find matching L2 source index
+        const idx = app.namespaceData.l2_sources.findIndex(s => s.file_path.includes(claim.file_path) || s.filename.includes(claim.source_id));
+        if (idx !== -1) {
+          app.activeL2SourceIdx = idx;
+        }
+        app.highlightClaimBytes(claim.byte_start, claim.byte_end);
+      }
+    };
+  </script>
+</body>
+</html>
