@@ -1,0 +1,157 @@
+from typing import Any, Dict, List, Optional
+from fastembed import TextEmbedding
+from core.contracts import ClaimRecord, ClaimStatus, DeletionReceipt, SourceRecord, TrustTier
+from core.forget import compute_fact_hmac, forget_target
+from core.okf_compiler import compile_namespace_okf
+from core.schema import ShardManager, serialize_f32
+
+# Singleton embedding model so it only loads once per process
+_EMBED_MODEL: Optional[TextEmbedding] = None
+
+
+def get_embedder() -> TextEmbedding:
+    global _EMBED_MODEL
+    if _EMBED_MODEL is None:
+        _EMBED_MODEL = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    return _EMBED_MODEL
+
+
+def embed_text(text: str) -> List[float]:
+    model = get_embedder()
+    vec = next(model.embed([text]))
+    return vec.tolist()
+
+
+class MemoryStore:
+    """Unified Storage API that Role 2 (Ingest/Policy/Retrieval) and Role 3 (MCP) call."""
+
+    def __init__(self, root_dir: str = "memory_root"):
+        self.sm = ShardManager(root_dir=root_dir)
+
+    # --- 1. ENTITY ALIAS RESOLUTION ---
+    def register_alias(self, namespace: str, alias: str, canonical_subject: str):
+        with self.sm.get_connection(namespace) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO entity_aliases (alias, canonical_subject) VALUES (?, ?)",
+                (alias.lower().strip(), canonical_subject.lower().strip()),
+            )
+            conn.commit()
+
+    def resolve_entity(self, namespace: str, subject: str) -> str:
+        clean = subject.lower().strip()
+        with self.sm.get_connection(namespace) as conn:
+            row = conn.execute(
+                "SELECT canonical_subject FROM entity_aliases WHERE alias = ?",
+                (clean,),
+            ).fetchone()
+            return row["canonical_subject"] if row else clean
+
+    # --- 2. SUPPRESSION CHECK (BLOCKS RE-LEARNING DELETED FACTS) ---
+    def is_suppressed(self, namespace: str, subject: str, predicate: str, object_val: str) -> bool:
+        fhmac = compute_fact_hmac(subject, predicate, object_val)
+        with self.sm.get_connection(namespace) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM suppression_hashes WHERE fact_hmac = ?",
+                (fhmac,),
+            ).fetchone()
+            return row is not None
+
+    # --- 3. WRITE PATH FOR ROLE 2 (POLICY ENGINE) ---
+    def save_source(
+        self, namespace: str, source_id: str, filename: str, text: str, origin: str, trust_tier: TrustTier
+    ) -> SourceRecord:
+        return self.sm.append_raw_source(namespace, source_id, filename, text, origin, trust_tier)
+
+    def get_active_claims_for_slot(self, namespace: str, subject: str, predicate: str) -> List[Dict[str, Any]]:
+        canon_subj = self.resolve_entity(namespace, subject)
+        with self.sm.get_connection(namespace) as conn:
+            rows = conn.execute(
+                """SELECT c.*, s.trust_tier, s.origin
+                   FROM claims_index c
+                   JOIN sources_index s ON c.source_id = s.source_id
+                   WHERE c.subject = ? AND c.predicate = ? AND c.status = 'active'""",
+                (canon_subj, predicate.lower().strip()),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def mark_claim_status(self, namespace: str, claim_id: str, new_status: ClaimStatus, valid_to: Optional[str] = None):
+        with self.sm.get_connection(namespace) as conn:
+            conn.execute(
+                "UPDATE claims_index SET status = ?, valid_to = COALESCE(?, valid_to) WHERE claim_id = ?",
+                (str(new_status.value), valid_to, claim_id),
+            )
+            conn.commit()
+        compile_namespace_okf(self.sm, namespace)
+
+    def store_claim(self, claim: ClaimRecord) -> bool:
+        """Embeds and stores a claim + updates .okf.md files. Returns False if suppressed."""
+        claim.subject = self.resolve_entity(claim.namespace, claim.subject)
+        if self.is_suppressed(claim.namespace, claim.subject, claim.predicate, claim.object_val):
+            return False
+
+        semantic_text = f"{claim.subject} {claim.predicate} {claim.object_val}"
+        vec = embed_text(semantic_text)
+        self.sm.insert_claim_with_lineage(claim, vec)
+        if claim.status == ClaimStatus.ACTIVE:
+            compile_namespace_okf(self.sm, claim.namespace)
+        return True
+
+    # --- 4. READ PATHS FOR ROLE 2 (HYBRID, GRAPH CTE, TEMPORAL, L2 QUOTE) ---
+    def search_hybrid(
+        self, namespace: str, query: str, top_k: int = 8, include_superseded: bool = False
+    ) -> List[Dict[str, Any]]:
+        q_vec = embed_text(query)
+        allowed_statuses = ("active", "disputed", "superseded") if include_superseded else ("active", "disputed")
+        placeholders = ",".join("?" for _ in allowed_statuses)
+
+        with self.sm.get_connection(namespace) as conn:
+            sql = f"""
+                SELECT c.*, s.file_path, s.origin, s.trust_tier, v.distance
+                FROM vec_claims v
+                JOIN lineage_index l ON l.vec_rowid = v.rowid
+                JOIN claims_index c ON c.claim_id = l.claim_id
+                JOIN sources_index s ON s.source_id = c.source_id
+                WHERE v.embedding MATCH ? AND k = ?
+                  AND c.status IN ({placeholders})
+                ORDER BY v.distance ASC
+            """
+            rows = conn.execute(sql, (serialize_f32(q_vec), top_k, *allowed_statuses)).fetchall()
+            return [dict(r) for r in rows]
+
+    def query_graph_multihop(self, namespace: str, start_subject: str, max_hops: int = 3) -> List[Dict[str, Any]]:
+        """Recursive CTE graph traversal over claims_index triples."""
+        canon = self.resolve_entity(namespace, start_subject)
+        with self.sm.get_connection(namespace) as conn:
+            rows = conn.execute(
+                """
+                WITH RECURSIVE graph_walk(claim_id, subject, predicate, object_val, source_id, hop) AS (
+                    SELECT claim_id, subject, predicate, object_val, source_id, 1
+                    FROM claims_index
+                    WHERE subject = ? AND status = 'active'
+                    UNION ALL
+                    SELECT c.claim_id, c.subject, c.predicate, c.object_val, c.source_id, g.hop + 1
+                    FROM claims_index c
+                    JOIN graph_walk g ON c.subject = LOWER(g.object_val)
+                    WHERE c.status = 'active' AND g.hop < ?
+                )
+                SELECT DISTINCT claim_id, subject, predicate, object_val, source_id, hop
+                FROM graph_walk
+                ORDER BY hop ASC;
+                """,
+                (canon, max_hops),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def read_verified_span(self, namespace: str, file_path: str, byte_start: int, byte_end: int) -> str:
+        """L2 On-Demand Reader: seeks directly to exact byte offsets on disk."""
+        target = self.sm.get_shard_dir(namespace) / file_path
+        if not target.exists():
+            return ""
+        with open(target, "rb") as f:
+            f.seek(byte_start)
+            return f.read(byte_end - byte_start).decode("utf-8", errors="replace")
+
+    # --- 5. DELETION PATH ---
+    def forget(self, namespace: str, target_query: str) -> DeletionReceipt:
+        q_vec = embed_text(target_query)
+        return forget_target(self.sm, namespace, target_query, query_embedding=q_vec)
