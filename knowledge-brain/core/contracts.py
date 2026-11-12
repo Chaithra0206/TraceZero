@@ -347,10 +347,19 @@ class DeletionReceipt(BaseModel):
 
 
 class HandoffPacket(BaseModel):
-    packet_id: str
-    source_agent: str
-    target_agent: str
-    namespace: str
+    packet_id: str = ""
+    source_agent: str = "agent_a_claude"
+    target_agent: str = "agent_b"
+    namespace: str = ""
+    task_id: str = ""
+    goal: str = ""
+    completed_steps: List[str] = Field(default_factory=list)
+    pending_steps: List[str] = Field(default_factory=list)
+    open_questions: List[str] = Field(default_factory=list)
+    relied_on_claim_ids: List[str] = Field(default_factory=list)
+    verified_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    citations: List[str] = Field(default_factory=list)
+    source_okf_path: str = "tasks.okf.md"
     claims: List[ClaimRecord] = Field(default_factory=list)
     packed_prompt: str = ""
     tokens_used: int = 0
@@ -371,6 +380,8 @@ class HandoffPacket(BaseModel):
                 data["timestamp"] = data.pop("created_at")
             if "task_summary" in data and "context_summary" not in data:
                 data["context_summary"] = data.pop("task_summary")
+            if "task_goal" in data and "goal" not in data:
+                data["goal"] = data.pop("task_goal")
         return data
 
     @property
@@ -383,7 +394,11 @@ class HandoffPacket(BaseModel):
 
     @property
     def task_summary(self) -> str:
-        return self.context_summary
+        return self.context_summary or self.goal
+
+    @property
+    def task_goal(self) -> str:
+        return self.goal
 
     @property
     def active_claims(self) -> List[ClaimRecord]:

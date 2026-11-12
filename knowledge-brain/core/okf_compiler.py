@@ -27,7 +27,11 @@ def compile_namespace_okf(shard_manager: ShardManager, namespace: str):
 
     # Always ensure preferences.okf.md and any existing .okf.md files are rewritten
     # (even if all claims in a file were deleted!)
-    existing_okf = {p.name for p in shard_dir.glob("*.okf.md")}
+    existing_okf = {
+        p.name
+        for p in shard_dir.glob("*.okf.md")
+        if not (p.name == "tasks.okf.md" and "created_by_agent:" in p.read_text(encoding="utf-8", errors="ignore"))
+    }
     okf_targets = set(by_file.keys()) | existing_okf | {"preferences.okf.md"}
 
     for okf_file in okf_targets:
