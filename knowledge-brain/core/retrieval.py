@@ -29,7 +29,7 @@ def count_tokens(text: str) -> int:
 
 PREDICATE_KEYWORDS: Dict[str, Set[str]] = {
     "employer": {"employer", "company", "work", "works", "working", "job", "office", "organization", "firm", "employ", "employed"},
-    "lives_in": {"lives", "live", "living", "reside", "resides", "residing", "location", "city", "place", "based", "home", "country"},
+    "lives_in": {"lives", "live", "living", "reside", "resides", "residing", "location", "city", "place", "based", "home", "country", "moved", "relocated"},
     "favorite_color": {"color", "colour", "shade", "tint", "hue", "favorite_color"},
     "primary_language": {"primary_language", "programming", "language", "rust", "python"},
     "assigned_team": {"team", "assigned_team", "squad", "group"},
@@ -252,7 +252,7 @@ def recall_context(
             _add_row(dict(r))
 
     else:
-        # HYBRID_TIERED: prioritize structured active predicate matches, then strict vector matches
+        # HYBRID_TIERED: prioritize specific active predicates over stated/has_note fallback, newest first
         if matching_active_predicates:
             placeholders = ",".join("?" for _ in matching_active_predicates)
             with store.sm.get_connection(namespace) as conn:
@@ -262,14 +262,23 @@ def recall_context(
                         JOIN sources_index s ON c.source_id = s.source_id
                         WHERE c.namespace = ? AND c.status = 'active'
                           AND c.predicate IN ({placeholders})
-                        ORDER BY c.valid_from DESC""",
+                        ORDER BY CASE WHEN c.predicate IN ('stated', 'has_note') THEN 1 ELSE 0 END ASC,
+                                 c.valid_from DESC,
+                                 c.rowid DESC""",
                     [namespace, *matching_active_predicates],
                 ).fetchall()
             for r in rows:
                 _add_row(dict(r))
 
         if not matched_rows:
-            for h in qualifying_vec_hits:
+            sorted_vec_hits = sorted(
+                qualifying_vec_hits,
+                key=lambda h: (
+                    1 if h.get("predicate") in ("stated", "has_note") else 0,
+                    h.get("distance", 999.0),
+                ),
+            )
+            for h in sorted_vec_hits:
                 _add_row(h)
 
     if not matched_rows:

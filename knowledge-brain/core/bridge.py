@@ -118,46 +118,145 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _extract_claim_triples(text: str, namespace: str) -> List[Tuple[str, str, str]]:
-    """Simple heuristic triple extractor for memory statements."""
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    triples = []
+TEMPORAL_SUFFIX_RE = re.compile(
+    r"\s+\b(?:this week|last week|this month|last month|this year|last year|today|yesterday|recently|right now|now)\b\.?$",
+    re.IGNORECASE,
+)
+
+
+def clean_object_val(val: str) -> str:
+    """Trim punctuation and trailing temporal qualifiers from extracted object values."""
+    cleaned = val.strip().rstrip(".,!?;:")
+    while True:
+        updated = TEMPORAL_SUFFIX_RE.sub("", cleaned).strip().rstrip(".,!?;:")
+        if updated == cleaned:
+            break
+        cleaned = updated
+    return cleaned
+
+
+def split_into_atomic_clauses(text: str) -> List[str]:
+    """Split compound/multi-sentence text into atomic clauses for claim extraction."""
+    clauses: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = re.split(
+            r"(?:(?<=[.!?;])\s+(?=[A-Za-z0-9\"'(])|,?\s+\b(?:and|but)\b\s+(?=(?:i|my|we|our|emp_\d+|the|it|he|she|they|moved|relocated|live|lives|reside|resides|based|located|favorite|primary|role|works|preferred|decided)\b))",
+            line,
+            flags=re.IGNORECASE,
+        )
+        for p in parts:
+            stripped = p.strip()
+            if stripped:
+                clauses.append(stripped)
+    return clauses
+
+
+def _extract_claim_triples_with_spans(
+    text: str, namespace: str
+) -> List[Tuple[str, str, str, str]]:
+    """Extract (subject, predicate, object_val, exact_clause) tuples from raw text."""
+    clauses = split_into_atomic_clauses(text)
+    triples: List[Tuple[str, str, str, str]] = []
     default_sub = namespace.split("/")[-1] if "/" in namespace else "user"
 
-    for line in lines:
-        # Check patterns like "lives in Bengaluru" / "location is Bengaluru"
-        loc_match = re.search(r"(?:lives\s+in|location\s+is|moved\s+to|relocated\s+to)\s+([A-Za-z\s]+)", line, re.IGNORECASE)
+    for clause in clauses:
+        # 1. Favorite color: "My favorite color is electric indigo"
+        color_match = re.search(
+            r"(?:(?:my\s+)?favorite[\s_]+color\s+(?:is|was|are)|prefers?\s+color)\s+([A-Za-z0-9_\-\s]+)",
+            clause,
+            re.IGNORECASE,
+        )
+        if color_match:
+            val = clean_object_val(color_match.group(1))
+            if val:
+                triples.append((default_sub, "favorite_color", val, clause))
+                continue
+
+        # 2. Location: "I live in Mangaluru" / "I moved to Bengaluru this week"
+        loc_match = re.search(
+            r"(?:lives?\s+in|live\s+in|resides?\s+in|based\s+in|located\s+in|location\s+is|moved\s+to|relocated\s+to)\s+([A-Za-z0-9_\-\s]+)",
+            clause,
+            re.IGNORECASE,
+        )
         if loc_match:
-            val = loc_match.group(1).strip().rstrip(".,")
-            triples.append((default_sub, "lives_in", val))
-            continue
+            val = clean_object_val(loc_match.group(1))
+            if val:
+                triples.append((default_sub, "lives_in", val, clause))
+                continue
 
-        # Check DB / tool preferences: "preferred DB is PostgreSQL" / "DB preference is MongoDB"
-        db_match = re.search(r"(?:preferred\s+DB\s+is|database\s+of\s+choice\s+is|DB\s+preference\s+is|switch\s+(?:from\s+\w+\s+)?to)\s+([A-Za-z0-9_\-\s]+?)(?:\.|$)", line, re.IGNORECASE)
+        # 3. DB / tool preferences: "preferred DB is PostgreSQL" / "DB preference is MongoDB"
+        db_match = re.search(
+            r"(?:preferred\s+DB\s+is|preferred\s+database\s+is|database\s+of\s+choice\s+is|DB\s+preference\s+is|switch\s+(?:from\s+\w+\s+)?to)\s+([A-Za-z0-9_\-\s]+)",
+            clause,
+            re.IGNORECASE,
+        )
         if db_match:
-            val = db_match.group(1).strip().rstrip(".,")
-            triples.append((default_sub, "target_database", val))
-            continue
+            val = clean_object_val(db_match.group(1))
+            if val:
+                triples.append((default_sub, "target_database", val, clause))
+                continue
 
-        # Check primary key specifications: "primary keys in payment tables must use uuidv7"
-        pk_match = re.search(r"(?:primary\s+keys?.*?must\s+use|primary\s+keys?\s+(?:are|format|is))\s+([A-Za-z0-9_\-]+)", line, re.IGNORECASE)
+        # 4. Primary key specifications: "primary keys in payment tables must use uuidv7"
+        pk_match = re.search(
+            r"(?:primary\s+keys?.*?must\s+use|primary\s+keys?\s+(?:are|format|is))\s+([A-Za-z0-9_\-]+)",
+            clause,
+            re.IGNORECASE,
+        )
         if pk_match:
-            val = pk_match.group(1).strip().rstrip(".,")
-            triples.append((default_sub, "primary_key_spec", val))
-            continue
+            val = clean_object_val(pk_match.group(1))
+            if val:
+                triples.append((default_sub, "primary_key_spec", val, clause))
+                continue
 
-        # Check key: value
-        if ":" in line and not line.startswith("[") and not line.startswith("http"):
-            parts = line.split(":", 1)
+        # 5. Role & Employer
+        role_match = re.search(
+            r"(?:my\s+)?role\s+(?:is|was)\s+([A-Za-z0-9_\-\s]+)",
+            clause,
+            re.IGNORECASE,
+        )
+        if role_match:
+            val = clean_object_val(role_match.group(1))
+            if val:
+                triples.append((default_sub, "role", val, clause))
+                continue
+
+        emp_match = re.search(
+            r"(?:works?\s+at|employer\s+is)\s+([A-Za-z0-9_\-\s]+)",
+            clause,
+            re.IGNORECASE,
+        )
+        if emp_match:
+            val = clean_object_val(emp_match.group(1))
+            if val:
+                triples.append((default_sub, "employer", val, clause))
+                continue
+
+        # 6. Structured key: value
+        if ":" in clause and not clause.startswith("[") and not clause.startswith("http"):
+            parts = clause.split(":", 1)
             p = parts[0].strip().replace(" ", "_").lower()
-            o = parts[1].strip()
-            triples.append((default_sub, p, o))
-            continue
+            o = parts[1].strip().rstrip(".,;:")
+            if p and o:
+                triples.append((default_sub, p, o, clause))
+                continue
 
-    if not triples:
-        triples.append((default_sub, "stated", text.strip()))
+        # 7. Fallback atomic stated clause
+        cleaned_clause = clean_object_val(clause)
+        if cleaned_clause:
+            triples.append((default_sub, "stated", cleaned_clause, clause))
+
+    if not triples and text.strip():
+        triples.append((default_sub, "stated", clean_object_val(text), text.strip()))
 
     return triples
+
+
+def _extract_claim_triples(text: str, namespace: str) -> List[Tuple[str, str, str]]:
+    """Simple heuristic triple extractor for memory statements."""
+    return [(s, p, o) for s, p, o, _ in _extract_claim_triples_with_spans(text, namespace)]
 
 
 def remember(
@@ -221,11 +320,19 @@ def remember(
         ),
     )
 
-    extracted_triples = _extract_claim_triples(text, namespace)
+    extracted_triples = _extract_claim_triples_with_spans(text, namespace)
     created_claims = []
 
-    for sub, pred, obj in extracted_triples:
+    for sub, pred, obj, exact_clause in extracted_triples:
         claim_id = f"claim_{uuid4().hex[:8]}"
+        clause_bytes = exact_clause.encode("utf-8")
+        c_pos = source_bytes.find(clause_bytes)
+        if c_pos != -1:
+            c_byte_start = c_pos
+            c_byte_end = c_pos + len(clause_bytes)
+        else:
+            c_byte_start = byte_start
+            c_byte_end = byte_end
 
         if claim_status == "active":
             # Check if an existing active claim has same subject and predicate to supersede
@@ -258,8 +365,8 @@ def remember(
                 today,
                 None,
                 source_id,
-                byte_start,
-                byte_end,
+                c_byte_start,
+                c_byte_end,
                 "preferences.okf.md",
                 now_iso,
             ),
@@ -270,6 +377,8 @@ def remember(
             "predicate": pred,
             "object_val": obj,
             "status": claim_status,
+            "byte_start": c_byte_start,
+            "byte_end": c_byte_end,
         })
 
     conn.commit()
@@ -466,17 +575,22 @@ def recall(
                 latency_ms=round(latency, 2),
             ).model_dump()
 
-    # Search claims_index for active claims
+    # Search claims_index for active claims ordered newest-first
     cursor.execute(
-        "SELECT * FROM claims_index WHERE namespace = ? AND status = 'active'",
+        "SELECT *, rowid FROM claims_index WHERE namespace = ? AND status = 'active' ORDER BY valid_from DESC, created_at DESC, rowid DESC",
         (namespace,),
     )
     all_active = cursor.fetchall()
 
-    stopwords = {"what", "is", "where", "does", "the", "a", "an", "of", "in", "to", "for", "my", "user", "their"}
+    stopwords = {
+        "what", "is", "are", "was", "were", "where", "when", "why", "who", "which", "how",
+        "do", "does", "did", "am", "the", "a", "an", "of", "in", "to", "for", "my", "me",
+        "i", "we", "our", "you", "your", "user", "their", "right", "now", "currently",
+        "today", "this", "week", "month", "year",
+    }
     q_words = [w for w in re.findall(r"\w+", query_lower) if w not in stopwords]
 
-    matching_claims = []
+    scored_claims = []
     for c in all_active:
         sub = c["subject"].lower()
         pred = c["predicate"].lower()
@@ -485,7 +599,11 @@ def recall(
 
         score = sum(1 for w in q_words if w in c_text)
         if score > 0 or not q_words:
-            matching_claims.append(c)
+            is_specific = 0 if pred in ("stated", "has_note") else 1
+            scored_claims.append((score, is_specific, c["valid_from"], c["created_at"], c["rowid"], c))
+
+    scored_claims.sort(key=lambda item: (item[0], item[1], item[2], item[3], item[4]), reverse=True)
+    matching_claims = [item[5] for item in scored_claims]
 
     if not matching_claims:
         conn.close()

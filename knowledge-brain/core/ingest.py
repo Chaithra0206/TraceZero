@@ -19,164 +19,372 @@ from core.predicates import get_target_okf_file
 from core.storage_api import MemoryStore
 
 
+TEMPORAL_SUFFIX_RE = re.compile(
+    r"\s+\b(?:this week|last week|this month|last month|this year|last year|today|yesterday|recently|right now|now)\b\.?$",
+    re.IGNORECASE,
+)
+
+
+def clean_object_val(val: str) -> str:
+    """Trim trailing punctuation and temporal qualifiers from extracted object values."""
+    cleaned = val.strip().rstrip(".,!?;:")
+    while True:
+        updated = TEMPORAL_SUFFIX_RE.sub("", cleaned).strip().rstrip(".,!?;:")
+        if updated == cleaned:
+            break
+        cleaned = updated
+    return cleaned
+
+
+def split_into_atomic_clauses(text: str) -> List[str]:
+    """Split compound/multi-sentence input into atomic clauses preserving exact substrings."""
+    clauses: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = re.split(
+            r"(?:(?<=[.!?;])\s+(?=[A-Za-z0-9\"'(])|,?\s+\b(?:and|but)\b\s+(?=(?:i|my|we|our|emp_\d+|the|it|he|she|they|moved|relocated|live|lives|reside|resides|based|located|favorite|primary|role|works|preferred|decided)\b))",
+            line,
+            flags=re.IGNORECASE,
+        )
+        for p in parts:
+            stripped = p.strip()
+            if stripped:
+                clauses.append(stripped)
+    return clauses
+
+
 def extract_heuristic_candidates(
     raw_text: str, default_subject: str = "user"
 ) -> List[ExtractedCandidate]:
     """Regex and heuristic extractor for user facts, decisions, and tasks."""
     candidates: List[ExtractedCandidate] = []
+    clauses = split_into_atomic_clauses(raw_text) or ([raw_text.strip()] if raw_text.strip() else [])
 
-    # 1. Favorite Color
-    for m in re.finditer(
-        r"(?i)(?:my\s+)?favorite[\s_]+color\s+(?:is|was)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which|my)|\b[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="favorite_color",
-                object_val=val,
-                exact_quote=quote,
-            )
-        )
-    for m in re.finditer(r"(?i)prefers?\s+([a-zA-Z]+)\s+color", raw_text):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="favorite_color",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
+    for clause in clauses:
+        # 1. Favorite Color
+        for m in re.finditer(
+            r"(?i)(?:my\s+)?favorite[\s_]+color\s+(?:is|was)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which|my)|\b[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            quote = clause[m.start() : m.start(1) + len(m.group(1))].strip()
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="favorite_color",
+                        object_val=val,
+                        exact_quote=quote,
+                    )
+                )
+        for m in re.finditer(r"(?i)prefers?\s+([a-zA-Z]+)\s+color", clause):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="favorite_color",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
 
-    # 1b. Primary Language & Assigned Team
-    for m in re.finditer(
-        r"(?i)(?:my\s+)?primary[\s_]+language\s+(?:is|was)\s+([a-zA-Z0-9_\-+#]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="primary_language",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)(?:my\s+)?assigned[\s_]+team\s+(?:is|was)\s+([a-zA-Z0-9_\-]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="assigned_team",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
+        # 1b. Primary Language & Assigned Team
+        for m in re.finditer(
+            r"(?i)(?:my\s+)?primary[\s_]+language\s+(?:is|was)\s+([a-zA-Z0-9_\-+#]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="primary_language",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)(?:my\s+)?assigned[\s_]+team\s+(?:is|was)\s+([a-zA-Z0-9_\-]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="assigned_team",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
 
-    # 2. Location (lives_in)
-    for m in re.finditer(
-        r"(?i)(?:I\s+)?(?:lives?\s+in|resides?\s+in|based\s+in|moved\s+to|located\s+in)\s+([a-zA-Z\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="lives_in",
-                object_val=val,
-                exact_quote=quote,
-            )
-        )
+        # 2. Location (lives_in)
+        for m in re.finditer(
+            r"(?i)(?:I\s+)?(?:lives?\s+in|resides?\s+in|based\s+in|moved\s+to|relocated\s+to|located\s+in)\s+([a-zA-Z\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            quote = clause[m.start() : m.start(1) + len(m.group(1))].strip()
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="lives_in",
+                        object_val=val,
+                        exact_quote=quote,
+                    )
+                )
 
-    # 3. Preferred Database / Database Decision
-    for m in re.finditer(
-        r"(?i)preferred\s+database\s+(?:is|to\s+use)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="preferred_db",
-                object_val=val,
-                exact_quote=quote,
-            )
-        )
-    for m in re.finditer(
-        r"(?i)primary\s+database\s+engine(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(MongoDB\s+[\d.]+|Postgres\s+\d+|PostgreSQL|MySQL\s+[\d.]+|[a-zA-Z0-9_\-]+)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="project_atlas",
-                predicate="preferred_db",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)(?:use|uses|using)\s+([a-zA-Z0-9_\-]+)\s+(?:as\s+our\s+|for\s+)?database",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="system",
-                predicate="uses_database",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
+        # 3. Preferred Database / Database Decision
+        for m in re.finditer(
+            r"(?i)preferred\s+database\s+(?:is|to\s+use)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            quote = clause[m.start() : m.start(1) + len(m.group(1))].strip()
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="preferred_db",
+                        object_val=val,
+                        exact_quote=quote,
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)primary\s+database\s+engine(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(MongoDB\s+[\d.]+|Postgres\s+\d+|PostgreSQL|MySQL\s+[\d.]+|[a-zA-Z0-9_\-]+)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject="project_atlas",
+                        predicate="preferred_db",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)(?:use|uses|using)\s+([a-zA-Z0-9_\-]+)\s+(?:as\s+our\s+|for\s+)?database",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject="system",
+                        predicate="uses_database",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
 
-    # 3b. Cloud Infrastructure: AWS region, deployment_env, project link, vault passphrase
-    for m in re.finditer(
-        r"(?i)(?:aws[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?aws[\s_]+region)",
-        raw_text,
-    ):
-        val = (m.group(1) or m.group(2)).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="project_atlas",
-                predicate="aws_region",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
+        # 3b. Cloud Infrastructure: AWS region, deployment_env, project link, vault passphrase
+        for m in re.finditer(
+            r"(?i)(?:aws[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?aws[\s_]+region)",
+            clause,
+        ):
+            val = (m.group(1) or m.group(2)).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject="project_atlas",
+                    predicate="aws_region",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
             )
-        )
-    for m in re.finditer(
-        r"(?i)(?:update\s+|current\s+)?deployment_env(?:\s+is(?:\s+set)?|\s+to)?\s+(?:to\s+)?([a-zA-Z0-9_\-]+)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="project_atlas",
-                predicate="deployment_env",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
+        for m in re.finditer(
+            r"(?i)(?:update\s+|current\s+)?deployment_env(?:\s+is(?:\s+set)?|\s+to)?\s+(?:to\s+)?([a-zA-Z0-9_\-]+)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject="project_atlas",
+                        predicate="deployment_env",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)(?:vault\s+passphrase[^:\n]*?\s+is|passphrase\s+is)\s+([^\s,;]+)",
+            clause,
+        ):
+            val = m.group(1).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=default_subject,
+                    predicate="vault_passphrase",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
             )
-        )
-    for m in re.finditer(
-        r"(?i)(?:vault\s+passphrase[^:\n]*?\s+is|passphrase\s+is)\s+([^\s,;]+)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="vault_passphrase",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
+
+        # 4. Role & Employer
+        for m in re.finditer(
+            r"(?i)(?:my\s+)?role\s+is\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            quote = clause[m.start() : m.start(1) + len(m.group(1))].strip()
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="role",
+                        object_val=val,
+                        exact_quote=quote,
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)(?:works?\s+at|employer\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="employer",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+
+        # 5. Coding style
+        for m in re.finditer(
+            r"(?i)coding\s+style\s+(?:is|preference\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject=default_subject,
+                        predicate="coding_style",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+
+        # 6. Graph Relationships: depends_on & manages
+        for m in re.finditer(
+            r"(?i)\b([a-zA-Z0-9_\-]+)\s+depends\s+on\s+([a-zA-Z0-9_\-]+)\b",
+            clause,
+        ):
+            s, o = m.group(1).strip(), m.group(2).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=s,
+                    predicate="depends_on",
+                    object_val=o,
+                    exact_quote=m.group(0).strip(),
+                )
             )
-        )
+        for m in re.finditer(
+            r"(?i)\b([a-zA-Z0-9_\-]+)\s+manages\s+([a-zA-Z0-9_\-]+)\b",
+            clause,
+        ):
+            s, o = m.group(1).strip(), m.group(2).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=s,
+                    predicate="manages",
+                    object_val=o,
+                    exact_quote=m.group(0).strip(),
+                )
+            )
+
+        # 7. Decisions and Constraints
+        for m in re.finditer(
+            r"(?i)decided(?:\s+to)?\s+([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = clean_object_val(m.group(1))
+            if val:
+                candidates.append(
+                    ExtractedCandidate(
+                        subject="architecture",
+                        predicate="decided",
+                        object_val=val,
+                        exact_quote=m.group(0).strip("., \n"),
+                    )
+                )
+        for m in re.finditer(
+            r"(?i)constraint:\s*([a-zA-Z0-9_\-\s<>=%]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = m.group(1).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject="architecture",
+                    predicate="constraint",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
+            )
+
+        # 8. Tasks (goal, completed, pending)
+        for m in re.finditer(
+            r"(?i)task\s+goal:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = m.group(1).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=default_subject,
+                    predicate="task_goal",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
+            )
+        for m in re.finditer(
+            r"(?i)(?:task\s+)?completed:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = m.group(1).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=default_subject,
+                    predicate="task_completed",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
+            )
+        for m in re.finditer(
+            r"(?i)(?:task\s+)?pending:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,;!\n]|$)",
+            clause,
+        ):
+            val = m.group(1).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject=default_subject,
+                    predicate="task_pending",
+                    object_val=val,
+                    exact_quote=m.group(0).strip("., \n"),
+                )
+            )
+
+        # 9. Prompt Injection candidate
+        for m in re.finditer(
+            r"(?i)(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|system\s+override|override\s+policy|disregard\s+trust\s+tier)[^\n]*",
+            clause,
+        ):
+            val = m.group(0).strip()
+            candidates.append(
+                ExtractedCandidate(
+                    subject="adversary",
+                    predicate="has_note",
+                    object_val=val,
+                    exact_quote=val,
+                )
+            )
+
     atlas_m = re.search(r"(?i)\b(Project Atlas)\b", raw_text)
     if atlas_m and default_subject != "user" and any(
         c.predicate in ("aws_region", "preferred_db", "deployment_env") for c in candidates
@@ -190,165 +398,9 @@ def extract_heuristic_candidates(
             )
         )
 
-    # 4. Role & Employer
-    for m in re.finditer(
-        r"(?i)(?:my\s+)?role\s+is\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        quote = raw_text[m.start() : m.start(1) + len(m.group(1))].strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="role",
-                object_val=val,
-                exact_quote=quote,
-            )
-        )
-    for m in re.finditer(
-        r"(?i)(?:works?\s+at|employer\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="employer",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-
-    # 5. Coding style
-    for m in re.finditer(
-        r"(?i)coding\s+style\s+(?:is|preference\s+is)\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="coding_style",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-
-    # 6. Graph Relationships: depends_on & manages
-    for m in re.finditer(
-        r"(?i)\b([a-zA-Z0-9_\-]+)\s+depends\s+on\s+([a-zA-Z0-9_\-]+)\b",
-        raw_text,
-    ):
-        s, o = m.group(1).strip(), m.group(2).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=s,
-                predicate="depends_on",
-                object_val=o,
-                exact_quote=m.group(0).strip(),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)\b([a-zA-Z0-9_\-]+)\s+manages\s+([a-zA-Z0-9_\-]+)\b",
-        raw_text,
-    ):
-        s, o = m.group(1).strip(), m.group(2).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=s,
-                predicate="manages",
-                object_val=o,
-                exact_quote=m.group(0).strip(),
-            )
-        )
-
-    # 7. Decisions and Constraints
-    for m in re.finditer(
-        r"(?i)decided(?:\s+to)?\s+([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="architecture",
-                predicate="decided",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)constraint:\s*([a-zA-Z0-9_\-\s<>=%]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="architecture",
-                predicate="constraint",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-
-    # 8. Tasks (goal, completed, pending)
-    for m in re.finditer(
-        r"(?i)task\s+goal:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="task_goal",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)(?:task\s+)?completed:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="task_completed",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-    for m in re.finditer(
-        r"(?i)(?:task\s+)?pending:\s*([a-zA-Z0-9_\-\s]+?)(?:[.,\n]|$)",
-        raw_text,
-    ):
-        val = m.group(1).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject=default_subject,
-                predicate="task_pending",
-                object_val=val,
-                exact_quote=m.group(0).strip("., \n"),
-            )
-        )
-
-    # 9. Prompt Injection candidate
-    for m in re.finditer(
-        r"(?i)(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|system\s+override|override\s+policy|disregard\s+trust\s+tier)[^\n]*",
-        raw_text,
-    ):
-        val = m.group(0).strip()
-        candidates.append(
-            ExtractedCandidate(
-                subject="adversary",
-                predicate="has_note",
-                object_val=val,
-                exact_quote=val,
-            )
-        )
-
     # 10. Fallback contextual note if nothing else matched
-    if not candidates and raw_text.strip():
-        first_clause = re.split(r"[.\n]", raw_text.strip())[0].strip()
+    if not candidates and clauses:
+        first_clause = clauses[0].rstrip(".,!?;:").strip()
         if first_clause:
             candidates.append(
                 ExtractedCandidate(

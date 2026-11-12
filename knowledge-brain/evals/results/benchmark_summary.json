@@ -21,10 +21,10 @@
     },
     "token_efficiency": {
       "full_30_session_tokens": 17263,
-      "avg_recalled_tokens": 312.2,
+      "avg_recalled_tokens": 309.8,
       "max_recalled_tokens": 386,
       "token_budget": 800,
-      "token_savings_pct": 98.19
+      "token_savings_pct": 98.21
     },
     "byte_cleanliness": {
       "knowledge_brain_byte_matches": 0,
@@ -46,20 +46,20 @@
         "byte_clean_deletion_pct": 0.0
       },
       "naive_vector_rag": {
-        "avg_tokens": 136.3,
+        "avg_tokens": 134.0,
         "accuracy_pct": 25.0,
-        "p50_latency_ms": 44.96,
-        "p95_latency_ms": 45.43,
+        "p50_latency_ms": 44.93,
+        "p95_latency_ms": 45.65,
         "contradiction_accuracy_pct": 0.0,
         "poison_resistance_pct": 0.0,
         "abstention_precision_pct": 0.0,
         "byte_clean_deletion_pct": 0.0
       },
       "knowledge_brain": {
-        "avg_tokens": 312.2,
+        "avg_tokens": 309.8,
         "accuracy_pct": 100.0,
-        "p50_latency_ms": 6.25,
-        "p95_latency_ms": 34.58,
+        "p50_latency_ms": 5.99,
+        "p95_latency_ms": 34.81,
         "contradiction_accuracy_pct": 100.0,
         "poison_resistance_pct": 100.0,
         "abstention_precision_pct": 100.0,
@@ -68,12 +68,12 @@
     },
     "deletion_receipts": {
       "stored_secret_receipt": {
-        "receipt_id": "del_a2256a99",
+        "receipt_id": "del_6cb8c620",
         "namespace": "acme_corp/users/emp_042",
         "target_query": "OrionVault#2026!",
         "target": "OrionVault#2026!",
         "deleted_claim_ids": [
-          "clm_2836fc7ae4b3"
+          "clm_57e38a2e6251"
         ],
         "redacted_source_spans": [
           "sources/session_11.txt:2727:2785"
@@ -92,12 +92,12 @@
         "sha256_after": "",
         "scrubbed_files_sha256": {
           ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-          "decisions.okf.md": "ed3efd4cc25f35b87270a5382ec27587dfc65adf06f6e2bc395f799564609fa7",
-          "index.sqlite": "df58e87117c4c3718aef5c9c0cbb37b2736c1c2c4ce412af9fe10a08edc68e95",
-          "index.sqlite-shm": "3af1f2e66ff7cea725a28898bf142dfc6fa5243ddeb341865a3fe9a7a41cf3aa",
-          "index.sqlite-wal": "ec6ec59ea0c6b15b6fe18aed973fe33bb51efc2c24b2058c694323a650455406",
-          "notes.okf.md": "7363e6865ba1ba72ad1be64138c336110818617268a52e4441cf0800c6a3774f",
-          "preferences.okf.md": "7234fa3b5a163c8ddb0b59a1c4d10cbdd7664aa9b0ef3b8acc5b022ad97dd4e3",
+          "decisions.okf.md": "7708a1b46652c665ed8c814e783fea1da49e6ca6396191b732c230ab3784dabd",
+          "index.sqlite": "f7e2d0b002e940e177f5c90e0615081a2268dc0be22c632864816e61925300b5",
+          "index.sqlite-shm": "8039b449c580304488dc2e73dfe30502583e056f639db0b48e08d37bfc143dca",
+          "index.sqlite-wal": "e4d0261341937c96ab19f7db021bdeb87ce66746aa47be9acfbb551f2dc414cb",
+          "notes.okf.md": "30d801163b8494a39555f639dbe395b71a61b98e755a961328d0b85c76e4de88",
+          "preferences.okf.md": "7fc932167d58cfb73b8c1ddec5e98e8b10350fb5a6210f6de7b8e5b86f37c882",
           "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
           "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
           "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -129,13 +129,13 @@
           "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
           "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
           "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-          "tasks.okf.md": "cd55e3952ddb82d0efdd1eb6a93abfb4bc34284efbb567ad2bf71371e244ad58"
+          "tasks.okf.md": "c4b3b6d7f4572e505b2ebfece18b76d9042fa04b99b5a1b01352a0b5b57a7718"
         },
-        "timestamp": "2026-11-12T22:45:13.115795+00:00",
+        "timestamp": "2026-11-12T23:47:12.089594+00:00",
         "byte_matches": 0
       },
       "never_stored_secret_receipt": {
-        "receipt_id": "del_65b657ba",
+        "receipt_id": "del_fd5ff66c",
         "namespace": "acme_corp/users/emp_042",
         "target_query": "NeverStoredPhantomKey#0000",
         "target": "NeverStoredPhantomKey#0000",
@@ -153,12 +153,12 @@
         "sha256_after": "",
         "scrubbed_files_sha256": {
           ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-          "decisions.okf.md": "a99f7cabbb89f5ea3f390a167e69fa1957a533d671b7972bb7cbaf06aef221bb",
-          "index.sqlite": "f7f9dcbaa617c466ca2052d169fff70927993b3b184eb56a925f76b6ffaf332f",
-          "index.sqlite-shm": "7612ec3b939a9e52b9220bd61dd1ebf4b54c711cb17c2777896c578ef74fe1d6",
-          "index.sqlite-wal": "ca2b5256ee99ba5b0ada6386a7757c2b801d6a5fec30a10d951abcc3be813564",
-          "notes.okf.md": "cade88be9d1c3bea8cd28d576ad4d3f804ce0a40b60b03ebc310dd0b13f06a5b",
-          "preferences.okf.md": "458e4336700bab1d80f90f768b35b9ce2e419018f0b65eab434c07df65664e6b",
+          "decisions.okf.md": "d493fee06fa223767ee8d16329b7bfa7ce9cd6b990e18a0b283e2ef5033d9d88",
+          "index.sqlite": "b415b19f5eb9a1a4a7dfbce4ecd5c3d1539602d4fabdd77a1bea672663def578",
+          "index.sqlite-shm": "c82409f7519ca357261b92befb811c0b3bd077a5aeb4d338857c388eb7740bd8",
+          "index.sqlite-wal": "ebc5eb7bbe22e5d7488c071ef2e23a6cd339773df1585a4eac34aa392d41bc11",
+          "notes.okf.md": "5db628db9046ef979eac4232874e0fa689f33ed06dbeb5e47399a80f02235dd9",
+          "preferences.okf.md": "43ec7877801ab758ca9cd21cfa67bc17d06a5022cac16f567adf40f3220c4284",
           "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
           "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
           "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -190,9 +190,9 @@
           "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
           "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
           "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-          "tasks.okf.md": "0563769ec0dd88de3b98f96aa397adcc518de3136e64c5118b54a89a5b309c16"
+          "tasks.okf.md": "cc785a578a7dc8a8f46e74a48e42b76d71dc5561f9f188fe6bc6974eeb126f3e"
         },
-        "timestamp": "2026-11-12T22:45:13.146162+00:00",
+        "timestamp": "2026-11-12T23:47:12.119636+00:00",
         "byte_matches": 0
       }
     },
@@ -200,32 +200,32 @@
       "collision_ledger": {
         "name": "100_emp_namespace_isolation",
         "call_count": 100,
-        "context_tokens": 21133,
-        "prompt_tokens": 21133,
+        "context_tokens": 20980,
+        "prompt_tokens": 20980,
         "completion_tokens": 0,
-        "total_tokens": 21133,
-        "avg_context_tokens": 211.3,
-        "avg_prompt_tokens": 211.3
+        "total_tokens": 20980,
+        "avg_context_tokens": 209.8,
+        "avg_prompt_tokens": 209.8
       },
       "rubric_ledger": {
         "name": "emp_042_rubric_and_probes",
         "call_count": 15,
-        "context_tokens": 863,
-        "prompt_tokens": 863,
+        "context_tokens": 853,
+        "prompt_tokens": 853,
         "completion_tokens": 0,
-        "total_tokens": 863,
-        "avg_context_tokens": 57.5,
-        "avg_prompt_tokens": 57.5
+        "total_tokens": 853,
+        "avg_context_tokens": 56.9,
+        "avg_prompt_tokens": 56.9
       },
       "efficiency_ledger": {
         "name": "token_efficiency_probes",
         "call_count": 4,
-        "context_tokens": 1249,
-        "prompt_tokens": 1249,
+        "context_tokens": 1239,
+        "prompt_tokens": 1239,
         "completion_tokens": 0,
-        "total_tokens": 1249,
-        "avg_context_tokens": 312.2,
-        "avg_prompt_tokens": 312.2
+        "total_tokens": 1239,
+        "avg_context_tokens": 309.8,
+        "avg_prompt_tokens": 309.8
       }
     }
   },
@@ -250,10 +250,10 @@
   },
   "token_efficiency": {
     "full_30_session_tokens": 17263,
-    "avg_recalled_tokens": 312.2,
+    "avg_recalled_tokens": 309.8,
     "max_recalled_tokens": 386,
     "token_budget": 800,
-    "token_savings_pct": 98.19
+    "token_savings_pct": 98.21
   },
   "byte_cleanliness": {
     "knowledge_brain_byte_matches": 0,
@@ -267,32 +267,32 @@
     "collision_ledger": {
       "name": "100_emp_namespace_isolation",
       "call_count": 100,
-      "context_tokens": 21133,
-      "prompt_tokens": 21133,
+      "context_tokens": 20980,
+      "prompt_tokens": 20980,
       "completion_tokens": 0,
-      "total_tokens": 21133,
-      "avg_context_tokens": 211.3,
-      "avg_prompt_tokens": 211.3
+      "total_tokens": 20980,
+      "avg_context_tokens": 209.8,
+      "avg_prompt_tokens": 209.8
     },
     "rubric_ledger": {
       "name": "emp_042_rubric_and_probes",
       "call_count": 15,
-      "context_tokens": 863,
-      "prompt_tokens": 863,
+      "context_tokens": 853,
+      "prompt_tokens": 853,
       "completion_tokens": 0,
-      "total_tokens": 863,
-      "avg_context_tokens": 57.5,
-      "avg_prompt_tokens": 57.5
+      "total_tokens": 853,
+      "avg_context_tokens": 56.9,
+      "avg_prompt_tokens": 56.9
     },
     "efficiency_ledger": {
       "name": "token_efficiency_probes",
       "call_count": 4,
-      "context_tokens": 1249,
-      "prompt_tokens": 1249,
+      "context_tokens": 1239,
+      "prompt_tokens": 1239,
       "completion_tokens": 0,
-      "total_tokens": 1249,
-      "avg_context_tokens": 312.2,
-      "avg_prompt_tokens": 312.2
+      "total_tokens": 1239,
+      "avg_context_tokens": 309.8,
+      "avg_prompt_tokens": 309.8
     }
   },
   "five_strategy_benchmark": {
@@ -330,8 +330,8 @@
         },
         "overall_accuracy": 62.0,
         "tokens_used": 17310,
-        "latency_ms": 0.02,
-        "p50_latency_ms": 0.02,
+        "latency_ms": 0.03,
+        "p50_latency_ms": 0.03,
         "p95_latency_ms": 0.03,
         "byte_clean_rate_pct": 0.0,
         "token_ledger": {
@@ -355,27 +355,27 @@
           "Task State": 75.0
         },
         "tokens_by_type": {
-          "Preference": 336,
-          "Multi-hop": 376,
+          "Preference": 339,
+          "Multi-hop": 381,
           "What Changed": 396,
           "Count/Aggregate": 380,
-          "Task State": 402
+          "Task State": 400
         },
         "overall_accuracy": 78.0,
-        "tokens_used": 378,
-        "latency_ms": 35.36,
-        "p50_latency_ms": 35.41,
-        "p95_latency_ms": 36.09,
+        "tokens_used": 379,
+        "latency_ms": 35.62,
+        "p50_latency_ms": 35.53,
+        "p95_latency_ms": 37.23,
         "byte_clean_rate_pct": 0.0,
         "token_ledger": {
           "name": "Pure Vector (sqlite-vec)",
           "call_count": 10,
-          "context_tokens": 3782,
-          "prompt_tokens": 3782,
+          "context_tokens": 3791,
+          "prompt_tokens": 3791,
           "completion_tokens": 0,
-          "total_tokens": 3782,
-          "avg_context_tokens": 378.2,
-          "avg_prompt_tokens": 378.2
+          "total_tokens": 3791,
+          "avg_context_tokens": 379.1,
+          "avg_prompt_tokens": 379.1
         }
       },
       {
@@ -390,25 +390,25 @@
         "tokens_by_type": {
           "Preference": 222,
           "Multi-hop": 222,
-          "What Changed": 279,
+          "What Changed": 278,
           "Count/Aggregate": 222,
           "Task State": 222
         },
         "overall_accuracy": 95.0,
         "tokens_used": 233,
-        "latency_ms": 1.56,
-        "p50_latency_ms": 1.56,
-        "p95_latency_ms": 1.97,
+        "latency_ms": 1.62,
+        "p50_latency_ms": 1.58,
+        "p95_latency_ms": 2.11,
         "byte_clean_rate_pct": 0.0,
         "token_ledger": {
           "name": "Claims / Knowledge Graph",
           "call_count": 10,
-          "context_tokens": 2334,
-          "prompt_tokens": 2334,
+          "context_tokens": 2332,
+          "prompt_tokens": 2332,
           "completion_tokens": 0,
-          "total_tokens": 2334,
-          "avg_context_tokens": 233.4,
-          "avg_prompt_tokens": 233.4
+          "total_tokens": 2332,
+          "avg_context_tokens": 233.2,
+          "avg_prompt_tokens": 233.2
         }
       },
       {
@@ -421,27 +421,27 @@
           "Task State": 92.5
         },
         "tokens_by_type": {
-          "Preference": 490,
-          "Multi-hop": 846,
-          "What Changed": 698,
-          "Count/Aggregate": 594,
-          "Task State": 994
+          "Preference": 468,
+          "Multi-hop": 831,
+          "What Changed": 684,
+          "Count/Aggregate": 576,
+          "Task State": 978
         },
         "overall_accuracy": 92.0,
-        "tokens_used": 724,
+        "tokens_used": 707,
         "latency_ms": 0.09,
         "p50_latency_ms": 0.09,
-        "p95_latency_ms": 0.1,
+        "p95_latency_ms": 0.11,
         "byte_clean_rate_pct": 0.0,
         "token_ledger": {
           "name": "OKF Files (.okf.md)",
           "call_count": 10,
-          "context_tokens": 7244,
-          "prompt_tokens": 7244,
+          "context_tokens": 7074,
+          "prompt_tokens": 7074,
           "completion_tokens": 0,
-          "total_tokens": 7244,
-          "avg_context_tokens": 724.4,
-          "avg_prompt_tokens": 724.4
+          "total_tokens": 7074,
+          "avg_context_tokens": 707.4,
+          "avg_prompt_tokens": 707.4
         }
       },
       {
@@ -464,7 +464,7 @@
         "tokens_used": 146,
         "latency_ms": 0.43,
         "p50_latency_ms": 0.43,
-        "p95_latency_ms": 0.45,
+        "p95_latency_ms": 0.48,
         "byte_clean_rate_pct": 0.0,
         "token_ledger": {
           "name": "SQL / Code (run_readonly_sql)",
@@ -487,27 +487,27 @@
           "Task State": 100.0
         },
         "tokens_by_type": {
-          "Preference": 312,
-          "Multi-hop": 452,
+          "Preference": 304,
+          "Multi-hop": 444,
           "What Changed": 384,
           "Count/Aggregate": 327,
-          "Task State": 472
+          "Task State": 474
         },
         "overall_accuracy": 100.0,
-        "tokens_used": 389,
-        "latency_ms": 34.96,
-        "p50_latency_ms": 34.93,
-        "p95_latency_ms": 35.59,
+        "tokens_used": 387,
+        "latency_ms": 34.72,
+        "p50_latency_ms": 34.73,
+        "p95_latency_ms": 35.27,
         "byte_clean_rate_pct": 100.0,
         "token_ledger": {
           "name": "Hybrid Scoped Engine",
           "call_count": 10,
-          "context_tokens": 3891,
-          "prompt_tokens": 3891,
+          "context_tokens": 3867,
+          "prompt_tokens": 3867,
           "completion_tokens": 0,
-          "total_tokens": 3891,
-          "avg_context_tokens": 389.1,
-          "avg_prompt_tokens": 389.1
+          "total_tokens": 3867,
+          "avg_context_tokens": 386.7,
+          "avg_prompt_tokens": 386.7
         }
       }
     ]
@@ -540,9 +540,9 @@
       "temporal_update_acc": 0.0,
       "provenance_precision": 0.5,
       "unlearning_compliance": 0.0,
-      "avg_tokens_per_turn": 136,
-      "latency_ms": 44.96,
-      "cost_per_1k_queries_usd": 0.41
+      "avg_tokens_per_turn": 134,
+      "latency_ms": 44.93,
+      "cost_per_1k_queries_usd": 0.4
     },
     {
       "name": "Knowledge Graph / Raw Triples",
@@ -552,7 +552,7 @@
       "provenance_precision": 0.75,
       "unlearning_compliance": 0.0,
       "avg_tokens_per_turn": 233,
-      "latency_ms": 1.56,
+      "latency_ms": 1.58,
       "cost_per_1k_queries_usd": 0.7
     },
     {
@@ -562,9 +562,9 @@
       "temporal_update_acc": 1.0,
       "provenance_precision": 1.0,
       "unlearning_compliance": 1.0,
-      "avg_tokens_per_turn": 312,
-      "latency_ms": 6.25,
-      "cost_per_1k_queries_usd": 0.94
+      "avg_tokens_per_turn": 310,
+      "latency_ms": 5.99,
+      "cost_per_1k_queries_usd": 0.93
     },
     {
       "name": "SQL / Code Execution",
@@ -595,20 +595,20 @@
       "byte_clean_deletion_pct": 0.0
     },
     "naive_vector_rag": {
-      "avg_tokens": 136.3,
+      "avg_tokens": 134.0,
       "accuracy_pct": 25.0,
-      "p50_latency_ms": 44.96,
-      "p95_latency_ms": 45.43,
+      "p50_latency_ms": 44.93,
+      "p95_latency_ms": 45.65,
       "contradiction_accuracy_pct": 0.0,
       "poison_resistance_pct": 0.0,
       "abstention_precision_pct": 0.0,
       "byte_clean_deletion_pct": 0.0
     },
     "knowledge_brain": {
-      "avg_tokens": 312.2,
+      "avg_tokens": 309.8,
       "accuracy_pct": 100.0,
-      "p50_latency_ms": 6.25,
-      "p95_latency_ms": 34.58,
+      "p50_latency_ms": 5.99,
+      "p95_latency_ms": 34.81,
       "contradiction_accuracy_pct": 100.0,
       "poison_resistance_pct": 100.0,
       "abstention_precision_pct": 100.0,
@@ -627,20 +627,20 @@
       "byte_clean_deletion_pct": 0.0
     },
     "naive_vector_rag": {
-      "avg_tokens": 136.3,
+      "avg_tokens": 134.0,
       "accuracy_pct": 25.0,
-      "p50_latency_ms": 44.96,
-      "p95_latency_ms": 45.43,
+      "p50_latency_ms": 44.93,
+      "p95_latency_ms": 45.65,
       "contradiction_accuracy_pct": 0.0,
       "poison_resistance_pct": 0.0,
       "abstention_precision_pct": 0.0,
       "byte_clean_deletion_pct": 0.0
     },
     "knowledge_brain": {
-      "avg_tokens": 312.2,
+      "avg_tokens": 309.8,
       "accuracy_pct": 100.0,
-      "p50_latency_ms": 6.25,
-      "p95_latency_ms": 34.58,
+      "p50_latency_ms": 5.99,
+      "p95_latency_ms": 34.81,
       "contradiction_accuracy_pct": 100.0,
       "poison_resistance_pct": 100.0,
       "abstention_precision_pct": 100.0,
@@ -670,12 +670,12 @@
   },
   "deletion_receipts": {
     "stored_secret_receipt": {
-      "receipt_id": "del_a2256a99",
+      "receipt_id": "del_6cb8c620",
       "namespace": "acme_corp/users/emp_042",
       "target_query": "OrionVault#2026!",
       "target": "OrionVault#2026!",
       "deleted_claim_ids": [
-        "clm_2836fc7ae4b3"
+        "clm_57e38a2e6251"
       ],
       "redacted_source_spans": [
         "sources/session_11.txt:2727:2785"
@@ -694,12 +694,12 @@
       "sha256_after": "",
       "scrubbed_files_sha256": {
         ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-        "decisions.okf.md": "ed3efd4cc25f35b87270a5382ec27587dfc65adf06f6e2bc395f799564609fa7",
-        "index.sqlite": "df58e87117c4c3718aef5c9c0cbb37b2736c1c2c4ce412af9fe10a08edc68e95",
-        "index.sqlite-shm": "3af1f2e66ff7cea725a28898bf142dfc6fa5243ddeb341865a3fe9a7a41cf3aa",
-        "index.sqlite-wal": "ec6ec59ea0c6b15b6fe18aed973fe33bb51efc2c24b2058c694323a650455406",
-        "notes.okf.md": "7363e6865ba1ba72ad1be64138c336110818617268a52e4441cf0800c6a3774f",
-        "preferences.okf.md": "7234fa3b5a163c8ddb0b59a1c4d10cbdd7664aa9b0ef3b8acc5b022ad97dd4e3",
+        "decisions.okf.md": "7708a1b46652c665ed8c814e783fea1da49e6ca6396191b732c230ab3784dabd",
+        "index.sqlite": "f7e2d0b002e940e177f5c90e0615081a2268dc0be22c632864816e61925300b5",
+        "index.sqlite-shm": "8039b449c580304488dc2e73dfe30502583e056f639db0b48e08d37bfc143dca",
+        "index.sqlite-wal": "e4d0261341937c96ab19f7db021bdeb87ce66746aa47be9acfbb551f2dc414cb",
+        "notes.okf.md": "30d801163b8494a39555f639dbe395b71a61b98e755a961328d0b85c76e4de88",
+        "preferences.okf.md": "7fc932167d58cfb73b8c1ddec5e98e8b10350fb5a6210f6de7b8e5b86f37c882",
         "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
         "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
         "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -731,13 +731,13 @@
         "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
         "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
         "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-        "tasks.okf.md": "cd55e3952ddb82d0efdd1eb6a93abfb4bc34284efbb567ad2bf71371e244ad58"
+        "tasks.okf.md": "c4b3b6d7f4572e505b2ebfece18b76d9042fa04b99b5a1b01352a0b5b57a7718"
       },
-      "timestamp": "2026-11-12T22:45:13.115795+00:00",
+      "timestamp": "2026-11-12T23:47:12.089594+00:00",
       "byte_matches": 0
     },
     "never_stored_secret_receipt": {
-      "receipt_id": "del_65b657ba",
+      "receipt_id": "del_fd5ff66c",
       "namespace": "acme_corp/users/emp_042",
       "target_query": "NeverStoredPhantomKey#0000",
       "target": "NeverStoredPhantomKey#0000",
@@ -755,12 +755,12 @@
       "sha256_after": "",
       "scrubbed_files_sha256": {
         ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-        "decisions.okf.md": "a99f7cabbb89f5ea3f390a167e69fa1957a533d671b7972bb7cbaf06aef221bb",
-        "index.sqlite": "f7f9dcbaa617c466ca2052d169fff70927993b3b184eb56a925f76b6ffaf332f",
-        "index.sqlite-shm": "7612ec3b939a9e52b9220bd61dd1ebf4b54c711cb17c2777896c578ef74fe1d6",
-        "index.sqlite-wal": "ca2b5256ee99ba5b0ada6386a7757c2b801d6a5fec30a10d951abcc3be813564",
-        "notes.okf.md": "cade88be9d1c3bea8cd28d576ad4d3f804ce0a40b60b03ebc310dd0b13f06a5b",
-        "preferences.okf.md": "458e4336700bab1d80f90f768b35b9ce2e419018f0b65eab434c07df65664e6b",
+        "decisions.okf.md": "d493fee06fa223767ee8d16329b7bfa7ce9cd6b990e18a0b283e2ef5033d9d88",
+        "index.sqlite": "b415b19f5eb9a1a4a7dfbce4ecd5c3d1539602d4fabdd77a1bea672663def578",
+        "index.sqlite-shm": "c82409f7519ca357261b92befb811c0b3bd077a5aeb4d338857c388eb7740bd8",
+        "index.sqlite-wal": "ebc5eb7bbe22e5d7488c071ef2e23a6cd339773df1585a4eac34aa392d41bc11",
+        "notes.okf.md": "5db628db9046ef979eac4232874e0fa689f33ed06dbeb5e47399a80f02235dd9",
+        "preferences.okf.md": "43ec7877801ab758ca9cd21cfa67bc17d06a5022cac16f567adf40f3220c4284",
         "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
         "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
         "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -792,9 +792,9 @@
         "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
         "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
         "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-        "tasks.okf.md": "0563769ec0dd88de3b98f96aa397adcc518de3136e64c5118b54a89a5b309c16"
+        "tasks.okf.md": "cc785a578a7dc8a8f46e74a48e42b76d71dc5561f9f188fe6bc6974eeb126f3e"
       },
-      "timestamp": "2026-11-12T22:45:13.146162+00:00",
+      "timestamp": "2026-11-12T23:47:12.119636+00:00",
       "byte_matches": 0
     }
   },
@@ -817,8 +817,8 @@
       },
       "overall_accuracy": 62.0,
       "tokens_used": 17310,
-      "latency_ms": 0.02,
-      "p50_latency_ms": 0.02,
+      "latency_ms": 0.03,
+      "p50_latency_ms": 0.03,
       "p95_latency_ms": 0.03,
       "byte_clean_rate_pct": 0.0,
       "token_ledger": {
@@ -842,27 +842,27 @@
         "Task State": 75.0
       },
       "tokens_by_type": {
-        "Preference": 336,
-        "Multi-hop": 376,
+        "Preference": 339,
+        "Multi-hop": 381,
         "What Changed": 396,
         "Count/Aggregate": 380,
-        "Task State": 402
+        "Task State": 400
       },
       "overall_accuracy": 78.0,
-      "tokens_used": 378,
-      "latency_ms": 35.36,
-      "p50_latency_ms": 35.41,
-      "p95_latency_ms": 36.09,
+      "tokens_used": 379,
+      "latency_ms": 35.62,
+      "p50_latency_ms": 35.53,
+      "p95_latency_ms": 37.23,
       "byte_clean_rate_pct": 0.0,
       "token_ledger": {
         "name": "Pure Vector (sqlite-vec)",
         "call_count": 10,
-        "context_tokens": 3782,
-        "prompt_tokens": 3782,
+        "context_tokens": 3791,
+        "prompt_tokens": 3791,
         "completion_tokens": 0,
-        "total_tokens": 3782,
-        "avg_context_tokens": 378.2,
-        "avg_prompt_tokens": 378.2
+        "total_tokens": 3791,
+        "avg_context_tokens": 379.1,
+        "avg_prompt_tokens": 379.1
       }
     },
     {
@@ -877,25 +877,25 @@
       "tokens_by_type": {
         "Preference": 222,
         "Multi-hop": 222,
-        "What Changed": 279,
+        "What Changed": 278,
         "Count/Aggregate": 222,
         "Task State": 222
       },
       "overall_accuracy": 95.0,
       "tokens_used": 233,
-      "latency_ms": 1.56,
-      "p50_latency_ms": 1.56,
-      "p95_latency_ms": 1.97,
+      "latency_ms": 1.62,
+      "p50_latency_ms": 1.58,
+      "p95_latency_ms": 2.11,
       "byte_clean_rate_pct": 0.0,
       "token_ledger": {
         "name": "Claims / Knowledge Graph",
         "call_count": 10,
-        "context_tokens": 2334,
-        "prompt_tokens": 2334,
+        "context_tokens": 2332,
+        "prompt_tokens": 2332,
         "completion_tokens": 0,
-        "total_tokens": 2334,
-        "avg_context_tokens": 233.4,
-        "avg_prompt_tokens": 233.4
+        "total_tokens": 2332,
+        "avg_context_tokens": 233.2,
+        "avg_prompt_tokens": 233.2
       }
     },
     {
@@ -908,27 +908,27 @@
         "Task State": 92.5
       },
       "tokens_by_type": {
-        "Preference": 490,
-        "Multi-hop": 846,
-        "What Changed": 698,
-        "Count/Aggregate": 594,
-        "Task State": 994
+        "Preference": 468,
+        "Multi-hop": 831,
+        "What Changed": 684,
+        "Count/Aggregate": 576,
+        "Task State": 978
       },
       "overall_accuracy": 92.0,
-      "tokens_used": 724,
+      "tokens_used": 707,
       "latency_ms": 0.09,
       "p50_latency_ms": 0.09,
-      "p95_latency_ms": 0.1,
+      "p95_latency_ms": 0.11,
       "byte_clean_rate_pct": 0.0,
       "token_ledger": {
         "name": "OKF Files (.okf.md)",
         "call_count": 10,
-        "context_tokens": 7244,
-        "prompt_tokens": 7244,
+        "context_tokens": 7074,
+        "prompt_tokens": 7074,
         "completion_tokens": 0,
-        "total_tokens": 7244,
-        "avg_context_tokens": 724.4,
-        "avg_prompt_tokens": 724.4
+        "total_tokens": 7074,
+        "avg_context_tokens": 707.4,
+        "avg_prompt_tokens": 707.4
       }
     },
     {
@@ -951,7 +951,7 @@
       "tokens_used": 146,
       "latency_ms": 0.43,
       "p50_latency_ms": 0.43,
-      "p95_latency_ms": 0.45,
+      "p95_latency_ms": 0.48,
       "byte_clean_rate_pct": 0.0,
       "token_ledger": {
         "name": "SQL / Code (run_readonly_sql)",
@@ -974,27 +974,27 @@
         "Task State": 100.0
       },
       "tokens_by_type": {
-        "Preference": 312,
-        "Multi-hop": 452,
+        "Preference": 304,
+        "Multi-hop": 444,
         "What Changed": 384,
         "Count/Aggregate": 327,
-        "Task State": 472
+        "Task State": 474
       },
       "overall_accuracy": 100.0,
-      "tokens_used": 389,
-      "latency_ms": 34.96,
-      "p50_latency_ms": 34.93,
-      "p95_latency_ms": 35.59,
+      "tokens_used": 387,
+      "latency_ms": 34.72,
+      "p50_latency_ms": 34.73,
+      "p95_latency_ms": 35.27,
       "byte_clean_rate_pct": 100.0,
       "token_ledger": {
         "name": "Hybrid Scoped Engine",
         "call_count": 10,
-        "context_tokens": 3891,
-        "prompt_tokens": 3891,
+        "context_tokens": 3867,
+        "prompt_tokens": 3867,
         "completion_tokens": 0,
-        "total_tokens": 3891,
-        "avg_context_tokens": 389.1,
-        "avg_prompt_tokens": 389.1
+        "total_tokens": 3867,
+        "avg_context_tokens": 386.7,
+        "avg_prompt_tokens": 386.7
       }
     }
   ],
@@ -1013,20 +1013,20 @@
         "byte_clean_deletion_pct": 0.0
       },
       "naive_vector_rag": {
-        "avg_tokens": 136.3,
+        "avg_tokens": 134.0,
         "accuracy_pct": 25.0,
-        "p50_latency_ms": 44.96,
-        "p95_latency_ms": 45.43,
+        "p50_latency_ms": 44.93,
+        "p95_latency_ms": 45.65,
         "contradiction_accuracy_pct": 0.0,
         "poison_resistance_pct": 0.0,
         "abstention_precision_pct": 0.0,
         "byte_clean_deletion_pct": 0.0
       },
       "knowledge_brain": {
-        "avg_tokens": 312.2,
+        "avg_tokens": 309.8,
         "accuracy_pct": 100.0,
-        "p50_latency_ms": 6.25,
-        "p95_latency_ms": 34.58,
+        "p50_latency_ms": 5.99,
+        "p95_latency_ms": 34.81,
         "contradiction_accuracy_pct": 100.0,
         "poison_resistance_pct": 100.0,
         "abstention_precision_pct": 100.0,
@@ -1035,9 +1035,9 @@
     },
     "session_token_comparison": {
       "full_history_tokens": 17263,
-      "mem0_vector_tokens": 136,
-      "knowledge_brain_tokens": 312,
-      "reduction_percentage": 98.19
+      "mem0_vector_tokens": 134,
+      "knowledge_brain_tokens": 310,
+      "reduction_percentage": 98.21
     },
     "strategies": [
       {
@@ -1058,9 +1058,9 @@
         "temporal_update_acc": 0.0,
         "provenance_precision": 0.5,
         "unlearning_compliance": 0.0,
-        "avg_tokens_per_turn": 136,
-        "latency_ms": 44.96,
-        "cost_per_1k_queries_usd": 0.41
+        "avg_tokens_per_turn": 134,
+        "latency_ms": 44.93,
+        "cost_per_1k_queries_usd": 0.4
       },
       {
         "name": "Knowledge Graph / Raw Triples",
@@ -1070,7 +1070,7 @@
         "provenance_precision": 0.75,
         "unlearning_compliance": 0.0,
         "avg_tokens_per_turn": 233,
-        "latency_ms": 1.56,
+        "latency_ms": 1.58,
         "cost_per_1k_queries_usd": 0.7
       },
       {
@@ -1080,9 +1080,9 @@
         "temporal_update_acc": 1.0,
         "provenance_precision": 1.0,
         "unlearning_compliance": 1.0,
-        "avg_tokens_per_turn": 312,
-        "latency_ms": 6.25,
-        "cost_per_1k_queries_usd": 0.94
+        "avg_tokens_per_turn": 310,
+        "latency_ms": 5.99,
+        "cost_per_1k_queries_usd": 0.93
       },
       {
         "name": "SQL / Code Execution",
@@ -1101,21 +1101,21 @@
   "total_sessions": 30,
   "session_token_comparison": {
     "full_history_tokens": 17263,
-    "mem0_vector_tokens": 136,
-    "knowledge_brain_tokens": 312,
-    "reduction_percentage": 98.19
+    "mem0_vector_tokens": 134,
+    "knowledge_brain_tokens": 310,
+    "reduction_percentage": 98.21
   },
   "mvs_verification": {
     "sessions_seeded": 31,
     "process_restart_verified": true,
     "handoff_tokens": 340,
     "stored_deletion_receipt": {
-      "receipt_id": "del_bcca5bd6",
+      "receipt_id": "del_caa37a99",
       "namespace": "acme_corp/users/emp_042",
       "target_query": "OrionVault#2026!",
       "target": "OrionVault#2026!",
       "deleted_claim_ids": [
-        "clm_7b2a11a28d1b"
+        "clm_9847e655343e"
       ],
       "redacted_source_spans": [
         "sources/session_11.txt:2727:2785"
@@ -1134,12 +1134,12 @@
       "sha256_after": "",
       "scrubbed_files_sha256": {
         ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-        "decisions.okf.md": "8416a6537027ea69a3b07072fe31fd9a216581ce0292770491fc3c3a601e58fe",
-        "index.sqlite": "ec74373283b9846db3c1e76054f57ec5e25dae101d071199cebec60338b307cc",
-        "index.sqlite-shm": "6d58fe8b9fbda7b7ec5faa259a991e3674432c109afeb6cc47d57587747899b6",
-        "index.sqlite-wal": "071f80619437255234a9ab6b7c613e8400168bf6477d7b8fbfa6ac997dd35a0b",
-        "notes.okf.md": "246752304da923d3e902d89f8347ec26d590236bc61d90d24a7700a5c6c7e493",
-        "preferences.okf.md": "7ca51c882f70199e9462d5434394e77d32f0fe4376bd3152a8f7b46bc0c4aead",
+        "decisions.okf.md": "7e3a963aae7d4c5aebb90bccafa8f6d2a38dc4dd62d676d24b582b1311dc7f67",
+        "index.sqlite": "f9d3dbdd855d7568d05e363014c36ae89f6cd968d81f2e241dd249e7144ef22f",
+        "index.sqlite-shm": "fb51f125db305c8edadf0e8c7e68b7c18e0ff2ce47f49490cf58c513efdd65d9",
+        "index.sqlite-wal": "e1bdfcd5ed395acb7444b1809a517998e12a4f9864f9d9dcbb3db9eadd6501cb",
+        "notes.okf.md": "54330fa89b35c0db8a60fb330a3e9f76d8d9811698b6236958e82456571ddf58",
+        "preferences.okf.md": "2afb4eb257efa02aed80f43e1b01a9cb24816ad781935b0bb8ffb41735f34edf",
         "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
         "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
         "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -1171,12 +1171,12 @@
         "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
         "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
         "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-        "tasks.okf.md": "baea52ef4fdf4d14868e2153ee5571d62e890836cf346707f6434bf31e506c07"
+        "tasks.okf.md": "990a9499022c434a3a3064787559dd5c4b0ea65affae2dbd7930f43a404b425f"
       },
-      "timestamp": "2026-11-12T22:44:59.150167+00:00"
+      "timestamp": "2026-11-12T23:46:58.288433+00:00"
     },
     "never_stored_deletion_receipt": {
-      "receipt_id": "del_fdb35935",
+      "receipt_id": "del_3866fb18",
       "namespace": "acme_corp/users/emp_042",
       "target_query": "NeverStoredPhantomKey#0000",
       "target": "NeverStoredPhantomKey#0000",
@@ -1194,12 +1194,12 @@
       "sha256_after": "",
       "scrubbed_files_sha256": {
         ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-        "decisions.okf.md": "e34876199e1e69c6bbd455f2bb37b5e067a0e4a8df9ce7fec5883acb242e7067",
-        "index.sqlite": "380b3321cf3a38a65f7579b8415170c988de9a58bf161f1c548fbdea0542198b",
-        "index.sqlite-shm": "a2cf6e199135b69780989b5648fd1243118a441e959f9396907d5d4385508199",
-        "index.sqlite-wal": "10e846a115590814b36e430621f7782b00773fbff5b5a98739de306a0f224744",
-        "notes.okf.md": "79209fc98c25002bc3a714459a685c0ca5287a87ee4d7d28bdffd6be616fbd06",
-        "preferences.okf.md": "4e441c950001e6a075dc03484053666adeaaf13b79e7af183b71c35c8092c05a",
+        "decisions.okf.md": "3f1eecd6ca5414fff791f76f0efbc69a2999fb08afb3fbe417bffe6862f60852",
+        "index.sqlite": "2c755250da8d9807cbc16b639bf3f2a8d519eba3279c4edb2106a42d35c249a8",
+        "index.sqlite-shm": "4f2e733bb0d67e5b4aa945f8c3cf7bcb707455f2357669a6153e73223f5c7cbe",
+        "index.sqlite-wal": "732afa4cd784fba29492a23c9f39aec4c2c2f5c353853912c795ad511517cedd",
+        "notes.okf.md": "290b65bfcde2313e23f28474bf679bc390ae13edccd5de24e8e24768ea8c241e",
+        "preferences.okf.md": "bc535095db839b041e060fc32d0fc78fa09fd9711b80ed52a1e672181a17e0bd",
         "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
         "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
         "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -1231,9 +1231,9 @@
         "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
         "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
         "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-        "tasks.okf.md": "6469c44cda8dc58f2749a4a0363af502dfbbb435dc4a52fe497aaf3dd4f47472"
+        "tasks.okf.md": "4e0a484590c9b22fbe6e7407c6e3afcafca6548d8bb201aa919deb1314c47444"
       },
-      "timestamp": "2026-11-12T22:44:59.180076+00:00"
+      "timestamp": "2026-11-12T23:46:58.318166+00:00"
     },
     "post_deletion_probes_abstained": 10,
     "residual_shard_bytes": 0
@@ -1242,12 +1242,12 @@
   "process_restart_verified": true,
   "handoff_tokens": 340,
   "stored_deletion_receipt": {
-    "receipt_id": "del_bcca5bd6",
+    "receipt_id": "del_caa37a99",
     "namespace": "acme_corp/users/emp_042",
     "target_query": "OrionVault#2026!",
     "target": "OrionVault#2026!",
     "deleted_claim_ids": [
-      "clm_7b2a11a28d1b"
+      "clm_9847e655343e"
     ],
     "redacted_source_spans": [
       "sources/session_11.txt:2727:2785"
@@ -1266,12 +1266,12 @@
     "sha256_after": "",
     "scrubbed_files_sha256": {
       ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-      "decisions.okf.md": "8416a6537027ea69a3b07072fe31fd9a216581ce0292770491fc3c3a601e58fe",
-      "index.sqlite": "ec74373283b9846db3c1e76054f57ec5e25dae101d071199cebec60338b307cc",
-      "index.sqlite-shm": "6d58fe8b9fbda7b7ec5faa259a991e3674432c109afeb6cc47d57587747899b6",
-      "index.sqlite-wal": "071f80619437255234a9ab6b7c613e8400168bf6477d7b8fbfa6ac997dd35a0b",
-      "notes.okf.md": "246752304da923d3e902d89f8347ec26d590236bc61d90d24a7700a5c6c7e493",
-      "preferences.okf.md": "7ca51c882f70199e9462d5434394e77d32f0fe4376bd3152a8f7b46bc0c4aead",
+      "decisions.okf.md": "7e3a963aae7d4c5aebb90bccafa8f6d2a38dc4dd62d676d24b582b1311dc7f67",
+      "index.sqlite": "f9d3dbdd855d7568d05e363014c36ae89f6cd968d81f2e241dd249e7144ef22f",
+      "index.sqlite-shm": "fb51f125db305c8edadf0e8c7e68b7c18e0ff2ce47f49490cf58c513efdd65d9",
+      "index.sqlite-wal": "e1bdfcd5ed395acb7444b1809a517998e12a4f9864f9d9dcbb3db9eadd6501cb",
+      "notes.okf.md": "54330fa89b35c0db8a60fb330a3e9f76d8d9811698b6236958e82456571ddf58",
+      "preferences.okf.md": "2afb4eb257efa02aed80f43e1b01a9cb24816ad781935b0bb8ffb41735f34edf",
       "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
       "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
       "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -1303,12 +1303,12 @@
       "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
       "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
       "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-      "tasks.okf.md": "baea52ef4fdf4d14868e2153ee5571d62e890836cf346707f6434bf31e506c07"
+      "tasks.okf.md": "990a9499022c434a3a3064787559dd5c4b0ea65affae2dbd7930f43a404b425f"
     },
-    "timestamp": "2026-11-12T22:44:59.150167+00:00"
+    "timestamp": "2026-11-12T23:46:58.288433+00:00"
   },
   "never_stored_deletion_receipt": {
-    "receipt_id": "del_fdb35935",
+    "receipt_id": "del_3866fb18",
     "namespace": "acme_corp/users/emp_042",
     "target_query": "NeverStoredPhantomKey#0000",
     "target": "NeverStoredPhantomKey#0000",
@@ -1326,12 +1326,12 @@
     "sha256_after": "",
     "scrubbed_files_sha256": {
       ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-      "decisions.okf.md": "e34876199e1e69c6bbd455f2bb37b5e067a0e4a8df9ce7fec5883acb242e7067",
-      "index.sqlite": "380b3321cf3a38a65f7579b8415170c988de9a58bf161f1c548fbdea0542198b",
-      "index.sqlite-shm": "a2cf6e199135b69780989b5648fd1243118a441e959f9396907d5d4385508199",
-      "index.sqlite-wal": "10e846a115590814b36e430621f7782b00773fbff5b5a98739de306a0f224744",
-      "notes.okf.md": "79209fc98c25002bc3a714459a685c0ca5287a87ee4d7d28bdffd6be616fbd06",
-      "preferences.okf.md": "4e441c950001e6a075dc03484053666adeaaf13b79e7af183b71c35c8092c05a",
+      "decisions.okf.md": "3f1eecd6ca5414fff791f76f0efbc69a2999fb08afb3fbe417bffe6862f60852",
+      "index.sqlite": "2c755250da8d9807cbc16b639bf3f2a8d519eba3279c4edb2106a42d35c249a8",
+      "index.sqlite-shm": "4f2e733bb0d67e5b4aa945f8c3cf7bcb707455f2357669a6153e73223f5c7cbe",
+      "index.sqlite-wal": "732afa4cd784fba29492a23c9f39aec4c2c2f5c353853912c795ad511517cedd",
+      "notes.okf.md": "290b65bfcde2313e23f28474bf679bc390ae13edccd5de24e8e24768ea8c241e",
+      "preferences.okf.md": "bc535095db839b041e060fc32d0fc78fa09fd9711b80ed52a1e672181a17e0bd",
       "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
       "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
       "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -1363,9 +1363,9 @@
       "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
       "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
       "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-      "tasks.okf.md": "6469c44cda8dc58f2749a4a0363af502dfbbb435dc4a52fe497aaf3dd4f47472"
+      "tasks.okf.md": "4e0a484590c9b22fbe6e7407c6e3afcafca6548d8bb201aa919deb1314c47444"
     },
-    "timestamp": "2026-11-12T22:44:59.180076+00:00"
+    "timestamp": "2026-11-12T23:46:58.318166+00:00"
   },
   "post_deletion_probes_abstained": 10,
   "residual_shard_bytes": 0

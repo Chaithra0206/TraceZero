@@ -245,3 +245,71 @@ def test_handoff_mcp_tools(test_env: Path):
     assert "raw_okf_markdown" in get_res
     assert "# Task Handoff: task_mcp_integration_01" in get_res["raw_okf_markdown"]
     assert "l0_abstract" in get_res
+
+
+def test_compound_clause_splitting_temporal_strip_and_specific_predicate_priority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify compound clauses split cleanly, temporal suffixes strip, and answer_hint prefers specific predicates over stated."""
+    monkeypatch.setenv("MEMORY_ROOT", str(tmp_path))
+    server = create_mcp_server()
+    namespace = "acme_corp/users/emp_099"
+
+    # Seed an unrelated active 'stated' note mentioning 'live' first
+    run_tool(
+        server,
+        "remember",
+        {
+            "namespace": namespace,
+            "text": "General reminder to live well during sprint reviews.",
+            "origin": "user_session",
+        },
+    )
+
+    # 1. Compound sentence should split into favorite_color + lives_in (not stated)
+    compound_res = run_tool(
+        server,
+        "remember",
+        {
+            "namespace": namespace,
+            "text": "My favorite color is electric indigo and I live in Mangaluru.",
+            "origin": "user_session",
+        },
+    )
+    preds = {c["predicate"]: c["object_val"] for c in compound_res["claims"]}
+    assert preds["favorite_color"] == "electric indigo"
+    assert preds["lives_in"] == "Mangaluru"
+    assert "stated" not in preds
+
+    # 2. Temporal suffix should strip cleanly ('Bengaluru', not 'Bengaluru this week') and supersede Mangaluru
+    update_res = run_tool(
+        server,
+        "remember",
+        {
+            "namespace": namespace,
+            "text": "I moved to Bengaluru this week.",
+            "origin": "user_session",
+        },
+    )
+    assert len(update_res["claims"]) == 1
+    assert update_res["claims"][0]["predicate"] == "lives_in"
+    assert update_res["claims"][0]["object_val"] == "Bengaluru"
+
+    hist = run_tool(
+        server,
+        "history",
+        {"namespace": namespace, "subject": "emp_099", "predicate": "lives_in"},
+    )
+    assert any(h["object_val"] == "Mangaluru" and h["status"] == "superseded" for h in hist)
+    assert any(h["object_val"] == "Bengaluru" and h["status"] == "active" for h in hist)
+
+    # 3. recall should prefer specific 'lives_in' predicate over 'stated' and report Bengaluru
+    recall_res = run_tool(
+        server,
+        "recall",
+        {"namespace": namespace, "query": "Where do I live right now?"},
+    )
+    assert recall_res["status"] == "ok"
+    assert recall_res["l1_claims"][0]["predicate"] == "lives_in"
+    assert recall_res["l1_claims"][0]["object_val"] == "Bengaluru"
+    assert "Bengaluru" in recall_res["answer_hint"]
+    assert recall_res["l1_claims"][0]["predicate"] != "stated"
+

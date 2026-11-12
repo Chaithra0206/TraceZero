@@ -100,3 +100,42 @@ def test_role1_role2_full_pipeline_integration(tmp_path):
     recall_after_forget = recall_context(store, ns, "Where do I live?", token_budget=800)
     assert recall_after_forget.status == "abstained"
     assert recall_after_forget.packed_prompt == "I have no memory of that."
+
+
+def test_compound_sentence_and_temporal_suffix_stripping(tmp_path):
+    """Verify core.ingest splits compound clauses cleanly and strips trailing temporal phrases."""
+    from core.storage_api import MemoryStore
+
+    store = MemoryStore(root_dir=tmp_path)
+    ns = "acme_corp/users/emp_077"
+
+    res_compound = ingest_message(
+        store=store,
+        namespace=ns,
+        text="My favorite color is electric indigo and I live in Mangaluru.",
+        origin="user",
+        source_id="src_compound",
+        session_id="session_01",
+    )
+    by_pred = {c["predicate"]: c["object_val"] for c in res_compound}
+    assert by_pred["favorite_color"] == "electric indigo"
+    assert by_pred["lives_in"] == "Mangaluru"
+
+    res_move = ingest_message(
+        store=store,
+        namespace=ns,
+        text="I moved to Bengaluru this week.",
+        origin="user",
+        source_id="src_move",
+        session_id="session_02",
+    )
+    assert len(res_move) == 1
+    assert res_move[0]["predicate"] == "lives_in"
+    assert res_move[0]["object_val"] == "Bengaluru"
+
+    recall_ok = recall_context(store, ns, "Where do I live right now?", token_budget=800)
+    assert recall_ok.status == "ok"
+    assert recall_ok.claims[0].predicate == "lives_in"
+    assert recall_ok.claims[0].object_val == "Bengaluru"
+    assert "Bengaluru" in recall_ok.packed_prompt
+
