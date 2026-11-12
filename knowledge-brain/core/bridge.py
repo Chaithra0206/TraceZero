@@ -38,13 +38,32 @@ except ImportError:
 HMAC_SECRET = b"knowledge-brain-secret-key-v1"
 
 INJECTION_PATTERNS = [
-    re.compile(r"ignore\s+all\s+rules", re.IGNORECASE),
+    re.compile(r"ignore\s+(?:all\s+)?(?:previous\s+instructions|rules)", re.IGNORECASE),
     re.compile(r"leak\s+keys", re.IGNORECASE),
     re.compile(r"exfiltrat", re.IGNORECASE),
     re.compile(r"bypass\s+security", re.IGNORECASE),
-    re.compile(r"system\s+instruction\s+override", re.IGNORECASE),
+    re.compile(r"system\s+(?:instruction\s+override|override|prompt)", re.IGNORECASE),
+    re.compile(r"disregard\s+(?:all\s+)?(?:rules|trust|instructions)", re.IGNORECASE),
+    re.compile(r"transfer\s+funds", re.IGNORECASE),
     re.compile(r"attacker\.local", re.IGNORECASE),
 ]
+
+BRIDGE_ORIGIN_TRUST_MAP: Dict[str, int] = {
+    "user": 4,
+    "user_session": 4,
+    "agent_interaction": 3,
+    "assistant": 3,
+    "tool": 2,
+    "tool_output": 2,
+    "mcp": 2,
+    "doc": 1,
+    "document": 1,
+    "web": 1,
+    "web_scrape": 1,
+    "external_untrusted": 1,
+    "untrusted_scrape": 1,
+    "poisoned": 1,
+}
 
 
 def _check_prompt_injection(text: str, origin: str) -> bool:
@@ -277,10 +296,10 @@ def remember(
     now_iso = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     today = now_dt.strftime("%Y-%m-%d")
 
-    # Check for adversarial prompt injection
+    # Check for adversarial prompt injection & assign trust tier
     is_injection = _check_prompt_injection(text, origin)
-    claim_status = "quarantined" if is_injection else "active"
-    trust_tier = 1 if is_injection else (4 if origin == "user_session" else 3)
+    base_claim_status = "quarantined" if is_injection else "active"
+    trust_tier = 1 if is_injection else BRIDGE_ORIGIN_TRUST_MAP.get(origin.lower().strip(), 2)
 
     # Write source file
     sources_dir = shard_dir / "sources"
@@ -334,24 +353,40 @@ def remember(
             c_byte_start = byte_start
             c_byte_end = byte_end
 
-        if claim_status == "active":
-            # Check if an existing active claim has same subject and predicate to supersede
+        per_claim_status = base_claim_status
+        if base_claim_status == "active":
+            # Compare trust tier against existing active claims for the same (subject, predicate)
             cursor.execute(
-                "SELECT claim_id FROM claims_index WHERE namespace = ? AND subject = ? AND predicate = ? AND status = 'active'",
+                """SELECT c.claim_id, c.object_val, COALESCE(s.trust_tier, 3) AS trust_tier
+                   FROM claims_index c
+                   LEFT JOIN sources_index s ON c.source_id = s.source_id
+                   WHERE c.namespace = ? AND c.subject = ? AND c.predicate = ? AND c.status = 'active'""",
                 (namespace, sub, pred),
             )
             old_rows = cursor.fetchall()
-            for old_row in old_rows:
-                old_id = old_row["claim_id"]
-                cursor.execute(
-                    "UPDATE claims_index SET status = 'superseded', valid_to = ? WHERE claim_id = ?",
-                    (today, old_id),
-                )
+            higher_trust_conflict = next(
+                (r for r in old_rows if r["trust_tier"] > trust_tier and r["object_val"] != obj),
+                None,
+            )
+            if higher_trust_conflict is not None:
+                per_claim_status = "disputed"
                 edge_id = f"edge_{uuid4().hex[:6]}"
                 cursor.execute(
                     "INSERT INTO lineage_index VALUES (?, ?, ?, ?, ?)",
-                    (edge_id, old_id, claim_id, "superseded_by", now_iso),
+                    (edge_id, higher_trust_conflict["claim_id"], claim_id, "disputes", now_iso),
                 )
+            else:
+                for old_row in old_rows:
+                    old_id = old_row["claim_id"]
+                    cursor.execute(
+                        "UPDATE claims_index SET status = 'superseded', valid_to = ? WHERE claim_id = ?",
+                        (today, old_id),
+                    )
+                    edge_id = f"edge_{uuid4().hex[:6]}"
+                    cursor.execute(
+                        "INSERT INTO lineage_index VALUES (?, ?, ?, ?, ?)",
+                        (edge_id, old_id, claim_id, "superseded_by", now_iso),
+                    )
 
         cursor.execute(
             "INSERT INTO claims_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -361,7 +396,7 @@ def remember(
                 sub,
                 pred,
                 obj,
-                claim_status,
+                per_claim_status,
                 today,
                 None,
                 source_id,
@@ -376,7 +411,8 @@ def remember(
             "subject": sub,
             "predicate": pred,
             "object_val": obj,
-            "status": claim_status,
+            "status": per_claim_status,
+            "trust_tier": trust_tier,
             "byte_start": c_byte_start,
             "byte_end": c_byte_end,
         })
@@ -465,14 +501,7 @@ def _refresh_preferences_okf(shard_dir: Path, namespace: str) -> None:
                 s = sources[sid]
                 citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
 
-    if quarantined_claims:
-        body_lines.extend(["", "## Quarantined Detections"])
-        for c in quarantined_claims:
-            sid = c["source_id"]
-            body_lines.append(f"- Adversarial Injection: {c['object_val']}.[^{sid}]")
-            if sid in sources:
-                s = sources[sid]
-                citations[sid] = f"{s['file_path']} \"{s['quote']}\" (trust_tier={s['trust_tier']})"
+    # Quarantined detections are excluded from .okf.md to keep compiled memory injection-free.
 
     if citations:
         body_lines.extend(["", "## Evidence & Citations"])
@@ -810,7 +839,7 @@ def quarantine_list(
     cursor.execute(
         "SELECT c.*, s.file_path, s.origin, s.quote, s.trust_tier "
         "FROM claims_index c LEFT JOIN sources_index s ON c.source_id = s.source_id "
-        "WHERE c.namespace = ? AND c.status = 'quarantined' "
+        "WHERE c.namespace = ? AND c.status IN ('quarantined', 'disputed') "
         "ORDER BY c.created_at DESC",
         (namespace,),
     )
@@ -819,18 +848,24 @@ def quarantine_list(
 
     results = []
     for r in rows:
+        reason = (
+            "Adversarial prompt injection pattern detected."
+            if r["status"] == "quarantined"
+            else f"Lower-trust conflicting claim from origin='{r['origin']}' (trust_tier={r['trust_tier']})."
+        )
         results.append({
             "claim_id": r["claim_id"],
             "namespace": r["namespace"],
             "subject": r["subject"],
             "predicate": r["predicate"],
             "object_val": r["object_val"],
+            "status": r["status"],
             "source_id": r["source_id"],
             "file_path": r["file_path"],
             "quote": r["quote"],
             "trust_tier": r["trust_tier"],
             "origin": r["origin"],
-            "threat_reason": "Adversarial prompt injection pattern detected.",
+            "threat_reason": reason,
         })
     return results
 
@@ -995,7 +1030,8 @@ def forget(
     receipt = DeletionReceipt(
         receipt_id=receipt_id,
         namespace=namespace,
-        target=target,
+        target=f"[HMAC:{hmac_val[:16]}]",
+        target_query=f"[HMAC:{hmac_val[:16]}]",
         deleted_claim_ids=deleted_claim_ids,
         hmac_suppression_hash=hmac_val,
         sqlite_byte_matches=sqlite_byte_matches,
@@ -1018,7 +1054,9 @@ def forget(
 
     _refresh_preferences_okf(shard_dir, namespace)
 
-    return receipt.model_dump()
+    out = receipt.model_dump()
+    out["probe_abstention_rate"] = 1.0 if probe_passed else 0.0
+    return out
 
 
 def verify_deletion(

@@ -1,11 +1,11 @@
 {
   "stored_secret_receipt": {
-    "receipt_id": "del_6cb8c620",
+    "receipt_id": "del_bc40ef3a",
     "namespace": "acme_corp/users/emp_042",
     "target_query": "OrionVault#2026!",
     "target": "OrionVault#2026!",
     "deleted_claim_ids": [
-      "clm_57e38a2e6251"
+      "clm_d9fa88f63abd"
     ],
     "redacted_source_spans": [
       "sources/session_11.txt:2727:2785"
@@ -24,12 +24,12 @@
     "sha256_after": "",
     "scrubbed_files_sha256": {
       ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-      "decisions.okf.md": "7708a1b46652c665ed8c814e783fea1da49e6ca6396191b732c230ab3784dabd",
-      "index.sqlite": "f7e2d0b002e940e177f5c90e0615081a2268dc0be22c632864816e61925300b5",
-      "index.sqlite-shm": "8039b449c580304488dc2e73dfe30502583e056f639db0b48e08d37bfc143dca",
-      "index.sqlite-wal": "e4d0261341937c96ab19f7db021bdeb87ce66746aa47be9acfbb551f2dc414cb",
-      "notes.okf.md": "30d801163b8494a39555f639dbe395b71a61b98e755a961328d0b85c76e4de88",
-      "preferences.okf.md": "7fc932167d58cfb73b8c1ddec5e98e8b10350fb5a6210f6de7b8e5b86f37c882",
+      "decisions.okf.md": "4397fd3e21ebea391542c92e4ca536aba234faa6dfe359721c0aa2e1764909b2",
+      "index.sqlite": "ad18c401be615ec5661bfb1f7388285e49f9e40171f24442da0d09f9ca3fe7a8",
+      "index.sqlite-shm": "08fe3394d960f012738e5183022c139c101b5851e374ec0dc8c4c6b1cf3fc996",
+      "index.sqlite-wal": "57d94b49be91c0549df53af3bae062b78eccf775d3652f49836fd0366ef3d2d0",
+      "notes.okf.md": "d5cb6fc73613542699361bd04cbdd44cf0da25904c58d918f0b661359ae0c480",
+      "preferences.okf.md": "0fed4b1cc8d0d3088cd530ef9c292321c5c42e973dea676262c5b69510d95542",
       "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
       "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
       "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -61,13 +61,13 @@
       "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
       "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
       "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-      "tasks.okf.md": "c4b3b6d7f4572e505b2ebfece18b76d9042fa04b99b5a1b01352a0b5b57a7718"
+      "tasks.okf.md": "1620b42739a804f9c0c76439eb5990911ff6ab51f8eb3e320364036ada630b87"
     },
-    "timestamp": "2026-11-12T23:47:12.089594+00:00",
+    "timestamp": "2026-11-12T23:53:20.414309+00:00",
     "byte_matches": 0
   },
   "never_stored_secret_receipt": {
-    "receipt_id": "del_fd5ff66c",
+    "receipt_id": "del_2ea6c3d3",
     "namespace": "acme_corp/users/emp_042",
     "target_query": "NeverStoredPhantomKey#0000",
     "target": "NeverStoredPhantomKey#0000",
@@ -85,12 +85,12 @@
     "sha256_after": "",
     "scrubbed_files_sha256": {
       ".abstract.md": "18d52cc27a0db5d4e10855eb5cd92d0f33edf8bec1f7e6929a471ff09b234834",
-      "decisions.okf.md": "d493fee06fa223767ee8d16329b7bfa7ce9cd6b990e18a0b283e2ef5033d9d88",
-      "index.sqlite": "b415b19f5eb9a1a4a7dfbce4ecd5c3d1539602d4fabdd77a1bea672663def578",
-      "index.sqlite-shm": "c82409f7519ca357261b92befb811c0b3bd077a5aeb4d338857c388eb7740bd8",
-      "index.sqlite-wal": "ebc5eb7bbe22e5d7488c071ef2e23a6cd339773df1585a4eac34aa392d41bc11",
-      "notes.okf.md": "5db628db9046ef979eac4232874e0fa689f33ed06dbeb5e47399a80f02235dd9",
-      "preferences.okf.md": "43ec7877801ab758ca9cd21cfa67bc17d06a5022cac16f567adf40f3220c4284",
+      "decisions.okf.md": "9bee9198caa9c53940ce07cf4ba7331e8e4d38af5d53f6c7adf65788b603d75e",
+      "index.sqlite": "d7e8ef1c13ac369d8e8d53ce6ccf0d27e92ec8e74f1a2e1976481ec0b35eeb27",
+      "index.sqlite-shm": "832b58613935c0850486aa2838356a9561f000fa6d8a6230325a66f826a42bc9",
+      "index.sqlite-wal": "9a54c1a463c54c0b3be200e1b9394529cb1747a6bb7cdfc6aa1bae799d0f70f9",
+      "notes.okf.md": "b0aa19c77c7dfaddbe4d648e6abb7e45aad8f6c9a1894916717316616054882f",
+      "preferences.okf.md": "4d0b9519d61815dfb66d56111bbf44494ccfc29059c4942b965be3c88b2e2bc2",
       "sources/session_00_profile.txt": "be9be7855f2442956fdc27a1c691a0c54317d959244b2c20501e7566adbe92db",
       "sources/session_01.txt": "3d38eb2f9ccaca2bb504b32fa221c75c9010ac5ab011c723ca3aa3cc5bb776bd",
       "sources/session_02.txt": "f6a3cc33ccdcf7f3f8b02afb8f7b621d5a523823a2e2e8859f6fca1f8f5d6a60",
@@ -122,9 +122,9 @@
       "sources/session_28.txt": "2770954ac29f00dc8a3ebbbd1c595d883663ea7970a6244fd0c099d171d562be",
       "sources/session_29.txt": "123c8f5c786e7aaa8cd2c1dca463ba2cb897fe1b4326373e94ab20ddfdbc17c5",
       "sources/session_30.txt": "52594563703f9f0116060c44cce50a154b09bc70b3304679ee6cfee2e8c3faf1",
-      "tasks.okf.md": "cc785a578a7dc8a8f46e74a48e42b76d71dc5561f9f188fe6bc6974eeb126f3e"
+      "tasks.okf.md": "29475ded8eafd836fc3ef5919cac2d62e9685531a06335f7680a7fd4821eeaf9"
     },
-    "timestamp": "2026-11-12T23:47:12.119636+00:00",
+    "timestamp": "2026-11-12T23:53:20.450954+00:00",
     "byte_matches": 0
   }
 }
