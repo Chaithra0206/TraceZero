@@ -4,6 +4,10 @@ import yaml
 from core.schema import ShardManager
 
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def compile_namespace_okf(shard_manager: ShardManager, namespace: str):
     shard_dir = shard_manager.get_shard_dir(namespace)
     now = datetime.now(timezone.utc).isoformat()
