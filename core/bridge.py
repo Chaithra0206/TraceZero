@@ -11,28 +11,11 @@ if str(kb_dir) not in sys.path:
 target_file = kb_dir / "core" / "bridge.py"
 spec = importlib.util.spec_from_file_location("kb_bridge", target_file)
 mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
-remember = mod.remember
-recall = mod.recall
-explain = mod.explain
-history = mod.history
-quarantine_list = mod.quarantine_list
-confirm_quarantine = mod.confirm_quarantine
-forget = mod.forget
-verify_deletion = mod.verify_deletion
-handoff_create = mod.handoff_create
-handoff_get = mod.handoff_get
+for _name in dir(mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(mod, _name)
 
-__all__ = [
-    "remember",
-    "recall",
-    "explain",
-    "history",
-    "quarantine_list",
-    "confirm_quarantine",
-    "forget",
-    "verify_deletion",
-    "handoff_create",
-    "handoff_get",
-]
+__all__ = [n for n in dir(mod) if not n.startswith("_")]

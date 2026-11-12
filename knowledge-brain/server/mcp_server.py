@@ -11,6 +11,7 @@ if str(repo_root) not in sys.path:
 target_file = repo_root / "mcp_server.py"
 spec = importlib.util.spec_from_file_location("root_mcp_server", target_file)
 mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
 create_mcp_server = mod.create_mcp_server

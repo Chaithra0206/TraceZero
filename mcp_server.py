@@ -12,8 +12,9 @@ Available Tools:
 5. forget: Cryptographic unlearning with byte redaction and secure SQLite vacuum.
 6. verify_deletion: Verification proving zero byte leakage and 100% probe abstention.
 7. quarantine_list: Inspect intercepted prompt injections and untrusted inputs.
-8. handoff_create: Create an OKF v0.2 cross-agent task handoff packet.
-9. handoff_get: Read and verify an OKF v0.2 task handoff packet for staleness.
+8. confirm: Confirm or reject a quarantined or disputed claim.
+9. handoff_create: Create an OKF v0.2 cross-agent task handoff packet.
+10. handoff_get: Read and verify an OKF v0.2 task handoff packet for staleness.
 """
 
 from __future__ import annotations
@@ -139,6 +140,17 @@ def create_mcp_server(
             namespace: Memory shard namespace.
         """
         return bridge.quarantine_list(namespace=namespace)
+
+    @mcp.tool()
+    def confirm(namespace: str, claim_id: str, action: str = "approve") -> Dict[str, Any]:
+        """Confirm (approve) or reject a quarantined or disputed claim.
+
+        Args:
+            namespace: Memory shard namespace.
+            claim_id: Claim identifier to promote or reject.
+            action: 'approve' to promote to active, or 'reject' to permanently remove.
+        """
+        return bridge.confirm_quarantine(namespace=namespace, claim_id=claim_id, action=action)
 
     @mcp.tool()
     def handoff_create(

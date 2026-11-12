@@ -53,6 +53,7 @@ def test_mcp_tools_registration():
         "forget",
         "verify_deletion",
         "quarantine_list",
+        "confirm",
         "handoff_create",
         "handoff_get",
     }
@@ -140,6 +141,16 @@ def test_quarantine_blocking(test_env: Path):
     )
     assert recall_res["status"] == "abstained"
 
+    # 4. Verify confirm tool can reject the quarantined claim
+    quarantined_cid = rem_res["claims"][0]["claim_id"]
+    confirm_res = run_tool(
+        server,
+        "confirm",
+        {"namespace": namespace, "claim_id": quarantined_cid, "action": "reject"},
+    )
+    assert confirm_res["claim_id"] == quarantined_cid
+    assert confirm_res["status"] == "rejected"
+
 
 def test_byte_verified_deletion(test_env: Path):
     """(d) Verify cryptographic unlearning with 0 byte matches remaining."""
@@ -171,6 +182,8 @@ def test_byte_verified_deletion(test_env: Path):
     assert forget_res["sqlite_byte_matches"] == 0
     assert forget_res["filesystem_byte_matches"] == 0
     assert forget_res["wal_byte_matches"] == 0
+    assert forget_res["byte_scan_matches"] == 0
+    assert "scrubbed_files_sha256" in forget_res
     assert forget_res["probe_abstentions"] == "VERIFIED_ABSTAINED_10_PROBES"
     assert "receipt_id" in forget_res
 

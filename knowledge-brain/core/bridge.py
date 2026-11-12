@@ -740,6 +740,17 @@ def confirm_quarantine(
         raise ValueError(f"Claim '{claim_id}' not found")
 
     if action == "approve":
+        cursor.execute("SELECT subject, predicate FROM claims_index WHERE claim_id = ?", (claim_id,))
+        sp_row = cursor.fetchone()
+        if sp_row:
+            subj, pred = sp_row[0], sp_row[1]
+            if pred in SINGLE_VALUED_PREDICATES:
+                now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                cursor.execute(
+                    "UPDATE claims_index SET status = 'superseded', valid_to = ? "
+                    "WHERE namespace = ? AND subject = ? AND predicate = ? AND status = 'active' AND claim_id != ?",
+                    (now_iso, namespace, subj, pred, claim_id),
+                )
         cursor.execute("UPDATE claims_index SET status = 'active' WHERE claim_id = ?", (claim_id,))
         conn.commit()
         conn.close()
@@ -853,6 +864,16 @@ def forget(
     probe_str = "VERIFIED_ABSTAINED_10_PROBES" if probe_passed else "PROBE_FAILED"
     receipt_id = f"del_{uuid4().hex[:8]}"
 
+    scrubbed_hashes: Dict[str, str] = {}
+    for root_walk, _, files_walk in os.walk(shard_dir):
+        for fname in files_walk:
+            fpath = Path(root_walk) / fname
+            rel_p = str(fpath.relative_to(shard_dir))
+            try:
+                scrubbed_hashes[rel_p] = hashlib.sha256(fpath.read_bytes()).hexdigest()
+            except Exception:
+                pass
+
     receipt = DeletionReceipt(
         receipt_id=receipt_id,
         namespace=namespace,
@@ -862,6 +883,10 @@ def forget(
         sqlite_byte_matches=sqlite_byte_matches,
         wal_byte_matches=wal_matches,
         filesystem_byte_matches=fs_matches,
+        byte_scan_matches=sqlite_byte_matches + wal_matches + fs_matches,
+        fts_rebuilt=True,
+        vacuum_completed=True,
+        scrubbed_files_sha256=scrubbed_hashes,
         probe_abstentions=probe_str,
         sha256_after=hashlib.sha256(db_bytes).hexdigest(),
         timestamp=now_iso,

@@ -11,16 +11,11 @@ if str(kb_dir) not in sys.path:
 target_file = kb_dir / "core" / "handoff.py"
 spec = importlib.util.spec_from_file_location("kb_handoff", target_file)
 mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
-create_handoff = mod.create_handoff
-get_handoff = mod.get_handoff
-count_tokens = mod.count_tokens
-_resolve_memory_root = mod._resolve_memory_root
+for _name in dir(mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(mod, _name)
 
-__all__ = [
-    "create_handoff",
-    "get_handoff",
-    "count_tokens",
-    "_resolve_memory_root",
-]
+__all__ = [n for n in dir(mod) if not n.startswith("__")]

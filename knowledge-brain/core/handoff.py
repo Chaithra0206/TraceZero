@@ -241,8 +241,7 @@ def create_handoff(
         if needed_source_ids:
             placeholders = ",".join("?" for _ in needed_source_ids)
             cursor.execute(
-                f"SELECT source_id, file_path, origin, trust_tier, quote "
-                f"FROM sources_index WHERE source_id IN ({placeholders})",
+                f"SELECT * FROM sources_index WHERE source_id IN ({placeholders})",
                 list(needed_source_ids),
             )
             for s_row in cursor.fetchall():
@@ -482,3 +481,7 @@ def get_handoff(
     result["l0_abstract"] = l0_abstract
 
     return result
+
+
+from server.handoff import handoff_create, handoff_get
+

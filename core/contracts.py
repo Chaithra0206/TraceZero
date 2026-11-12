@@ -11,18 +11,11 @@ if str(kb_dir) not in sys.path:
 target_file = kb_dir / "core" / "contracts.py"
 spec = importlib.util.spec_from_file_location("kb_contracts", target_file)
 mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
-SourceSpan = mod.SourceSpan
-ClaimRecord = mod.ClaimRecord
-RecallResult = mod.RecallResult
-DeletionReceipt = mod.DeletionReceipt
-HandoffPacket = mod.HandoffPacket
+for _name in dir(mod):
+    if not _name.startswith("__"):
+        globals()[_name] = getattr(mod, _name)
 
-__all__ = [
-    "SourceSpan",
-    "ClaimRecord",
-    "RecallResult",
-    "DeletionReceipt",
-    "HandoffPacket",
-]
+__all__ = [n for n in dir(mod) if not n.startswith("_")]
