@@ -13,7 +13,9 @@ INJECTION_REGEX = re.compile(
     r"(?i)("
     r"ignore\s+(all\s+)?previous\s+instructions|"
     r"system\s+prompt|"
+    r"system\s+override|"
     r"override\s+policy|"
+    r"disregard\s+trust\s+tier|"
     r"always\s+answer|"
     r"bypass\s+safety|"
     r"you\s+are\s+now|"
@@ -58,6 +60,7 @@ def apply_policy_and_decide_status(
     origin: str,
     trust_tier: TrustTier,
     raw_quote: str,
+    full_text: str = "",
 ) -> Tuple[ClaimStatus, str, Optional[str]]:
     """Decide claim status based on security policy, trust tiers, and cardinality rules.
 
@@ -65,7 +68,11 @@ def apply_policy_and_decide_status(
         (status, reason, superseded_claim_id)
     """
     # 1. Prompt Injection / Imperative override check
-    if INJECTION_REGEX.search(raw_quote) or INJECTION_REGEX.search(object_val):
+    if (
+        INJECTION_REGEX.search(raw_quote)
+        or INJECTION_REGEX.search(object_val)
+        or (full_text and INJECTION_REGEX.search(full_text))
+    ):
         return (
             ClaimStatus.QUARANTINED,
             "Prompt injection or imperative override pattern detected",
@@ -90,8 +97,8 @@ def apply_policy_and_decide_status(
 
     if is_single_valued(canon_pred):
         for existing in existing_active:
+            old_trust = int(existing["trust_tier"])
             if existing["object_val"].strip().lower() != object_val.strip().lower():
-                old_trust = int(existing["trust_tier"])
                 if int(trust_tier) >= old_trust:
                     return (
                         ClaimStatus.ACTIVE,
@@ -103,6 +110,20 @@ def apply_policy_and_decide_status(
                     f"Contradicts active claim from higher-trust origin ({existing['origin']} tier {old_trust})",
                     None,
                 )
+            else:
+                # Identical value paraphrase/reinforcement: preserve single active claim invariant
+                if int(trust_tier) >= old_trust:
+                    return (
+                        ClaimStatus.ACTIVE,
+                        f"Refreshes/deduplicates existing active claim ({existing['claim_id']})",
+                        existing["claim_id"],
+                    )
+                if int(trust_tier) > int(TrustTier.DOC_WEB):
+                    return (
+                        ClaimStatus.SUPERSEDED,
+                        f"Corroborates higher-trust active claim ({existing['claim_id']})",
+                        None,
+                    )
 
         if int(trust_tier) <= int(TrustTier.DOC_WEB) or origin.lower() in ("doc", "web"):
             return (

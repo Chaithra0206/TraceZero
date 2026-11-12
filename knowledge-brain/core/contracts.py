@@ -120,6 +120,48 @@ PREDICATE_REGISTRY: Dict[str, PredicateMeta] = {
         okf_file="preferences.okf.md",
         description="Primary programming language",
     ),
+    "primary_language": PredicateMeta(
+        name="primary_language",
+        cardinality=Cardinality.SINGLE,
+        storage=StorageTier.PROMPT_L0,
+        okf_file="preferences.okf.md",
+        description="Primary programming language",
+    ),
+    "assigned_team": PredicateMeta(
+        name="assigned_team",
+        cardinality=Cardinality.SINGLE,
+        storage=StorageTier.GRAPH_CLAIM,
+        okf_file="preferences.okf.md",
+        description="Assigned engineering team",
+    ),
+    "works_on": PredicateMeta(
+        name="works_on",
+        cardinality=Cardinality.MULTI,
+        storage=StorageTier.GRAPH_CLAIM,
+        okf_file="decisions.okf.md",
+        description="Project or initiative the subject works on",
+    ),
+    "aws_region": PredicateMeta(
+        name="aws_region",
+        cardinality=Cardinality.SINGLE,
+        storage=StorageTier.OKF_FILE,
+        okf_file="preferences.okf.md",
+        description="Primary AWS deployment region",
+    ),
+    "deployment_env": PredicateMeta(
+        name="deployment_env",
+        cardinality=Cardinality.SINGLE,
+        storage=StorageTier.OKF_FILE,
+        okf_file="decisions.okf.md",
+        description="Current deployment environment",
+    ),
+    "vault_passphrase": PredicateMeta(
+        name="vault_passphrase",
+        cardinality=Cardinality.SINGLE,
+        storage=StorageTier.GRAPH_CLAIM,
+        okf_file="preferences.okf.md",
+        description="Break-glass credential or passphrase",
+    ),
     "timezone": PredicateMeta(
         name="timezone",
         cardinality=Cardinality.SINGLE,
@@ -395,6 +437,10 @@ class DeletionReceipt(BaseModel):
                 hmacs = data["suppression_hmacs"]
                 data["hmac_suppression_hash"] = hmacs[0] if hmacs else ""
         return data
+
+    @property
+    def byte_matches(self) -> int:
+        return self.byte_scan_matches
 
     @property
     def is_zero_trace_verified(self) -> bool:

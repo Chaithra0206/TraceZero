@@ -158,4 +158,5 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
+.tiktoken_cache/
 

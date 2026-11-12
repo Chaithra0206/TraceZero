@@ -27,7 +27,7 @@ def extract_heuristic_candidates(
 
     # 1. Favorite Color
     for m in re.finditer(
-        r"(?i)(?:my\s+)?favorite\s+color\s+(?:is|was)\s+([a-zA-Z\s]+?)(?:\s+(?:and|but|because|with|since|which)|\b[.,\n]|$)",
+        r"(?i)(?:my\s+)?favorite[\s_]+color\s+(?:is|was)\s+([a-zA-Z0-9_\-\s]+?)(?:\s+(?:and|but|because|with|since|which|my)|\b[.,\n]|$)",
         raw_text,
     ):
         val = m.group(1).strip()
@@ -46,6 +46,34 @@ def extract_heuristic_candidates(
             ExtractedCandidate(
                 subject=default_subject,
                 predicate="favorite_color",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 1b. Primary Language & Assigned Team
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?primary[\s_]+language\s+(?:is|was)\s+([a-zA-Z0-9_\-+#]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="primary_language",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:my\s+)?assigned[\s_]+team\s+(?:is|was)\s+([a-zA-Z0-9_\-]+?)(?:\s+(?:and|but|because|with|since|which|my)|[,.\n]|$)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="assigned_team",
                 object_val=val,
                 exact_quote=m.group(0).strip("., \n"),
             )
@@ -83,6 +111,19 @@ def extract_heuristic_candidates(
             )
         )
     for m in re.finditer(
+        r"(?i)primary\s+database\s+engine(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(MongoDB\s+[\d.]+|Postgres\s+\d+|PostgreSQL|MySQL\s+[\d.]+|[a-zA-Z0-9_\-]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="preferred_db",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
         r"(?i)(?:use|uses|using)\s+([a-zA-Z0-9_\-]+)\s+(?:as\s+our\s+|for\s+)?database",
         raw_text,
     ):
@@ -93,6 +134,59 @@ def extract_heuristic_candidates(
                 predicate="uses_database",
                 object_val=val,
                 exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+
+    # 3b. Cloud Infrastructure: AWS region, deployment_env, project link, vault passphrase
+    for m in re.finditer(
+        r"(?i)(?:aws[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?aws[\s_]+region)",
+        raw_text,
+    ):
+        val = (m.group(1) or m.group(2)).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="aws_region",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:update\s+|current\s+)?deployment_env(?:\s+is(?:\s+set)?|\s+to)?\s+(?:to\s+)?([a-zA-Z0-9_\-]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject="project_atlas",
+                predicate="deployment_env",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    for m in re.finditer(
+        r"(?i)(?:vault\s+passphrase[^:\n]*?\s+is|passphrase\s+is)\s+([^\s,;]+)",
+        raw_text,
+    ):
+        val = m.group(1).strip()
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="vault_passphrase",
+                object_val=val,
+                exact_quote=m.group(0).strip("., \n"),
+            )
+        )
+    atlas_m = re.search(r"(?i)\b(Project Atlas)\b", raw_text)
+    if atlas_m and default_subject != "user" and any(
+        c.predicate in ("aws_region", "preferred_db", "deployment_env") for c in candidates
+    ):
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="works_on",
+                object_val="project_atlas",
+                exact_quote=atlas_m.group(1),
             )
         )
 
@@ -239,7 +333,7 @@ def extract_heuristic_candidates(
 
     # 9. Prompt Injection candidate
     for m in re.finditer(
-        r"(?i)(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|override\s+policy)[^\n]*",
+        r"(?i)(?:ignore\s+(?:all\s+)?previous\s+instructions|system\s+prompt|system\s+override|override\s+policy|disregard\s+trust\s+tier)[^\n]*",
         raw_text,
     ):
         val = m.group(0).strip()
@@ -332,6 +426,7 @@ def ingest_message(
             origin=origin,
             trust_tier=trust_tier,
             raw_quote=cand.exact_quote,
+            full_text=text,
         )
 
         if superseded_id:

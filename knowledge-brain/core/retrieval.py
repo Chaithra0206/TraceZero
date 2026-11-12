@@ -31,7 +31,12 @@ PREDICATE_KEYWORDS: Dict[str, Set[str]] = {
     "employer": {"employer", "company", "work", "works", "working", "job", "office", "organization", "firm", "employ", "employed"},
     "lives_in": {"lives", "live", "living", "reside", "resides", "residing", "location", "city", "place", "based", "home", "country"},
     "favorite_color": {"color", "colour", "shade", "tint", "hue", "favorite_color"},
-    "preferred_db": {"db", "database", "storage", "datastore", "postgres", "mysql", "sql", "preferred_db"},
+    "primary_language": {"primary_language", "programming", "language", "rust", "python"},
+    "assigned_team": {"team", "assigned_team", "squad", "group"},
+    "preferred_db": {"db", "database", "engine", "storage", "datastore", "postgres", "postgresql", "mysql", "mongodb", "preferred_db"},
+    "aws_region": {"aws", "region", "regions", "aws_region", "oregon"},
+    "deployment_env": {"deployment_env", "deployment", "environment", "canary"},
+    "vault_passphrase": {"vault", "passphrase", "credential", "password", "break-glass", "orionvault"},
     "role": {"role", "title", "position", "designation", "job", "engineer", "architect", "lead"},
     "coding_style": {"coding", "style", "format", "conventions", "standards", "pep8", "linting"},
     "programming_language": {"language", "python", "typescript", "java", "golang", "rust", "c++"},
@@ -42,7 +47,7 @@ PREDICATE_KEYWORDS: Dict[str, Set[str]] = {
     "constraint": {"constraint", "limit", "restriction", "requirement", "latency", "sla"},
     "task_goal": {"goal", "objective", "task", "milestone", "mission", "target"},
     "task_completed": {"completed", "done", "finished", "resolved"},
-    "task_pending": {"pending", "remaining", "next", "todo", "upcoming"},
+    "task_pending": {"pending", "remaining", "todo", "upcoming"},
     "task_status": {"status", "phase", "state", "progress"},
     "has_note": {"note", "notes", "observation", "context", "memo"},
 }
@@ -122,7 +127,9 @@ def recall_context(
         ).fetchall()
     active_predicates = [r["predicate"] for r in active_pred_rows]
 
-    q_words = set(re.findall(r"\w+", query.lower()))
+    q_words = set(re.findall(r"\w+", query.lower())) | set(
+        re.findall(r"[a-z0-9_#-]+", query.lower())
+    )
     matching_active_predicates: List[str] = []
     for pred in active_predicates:
         pred_lower = pred.lower()
@@ -133,8 +140,15 @@ def recall_context(
 
     has_exact_predicate_match = len(matching_active_predicates) > 0
 
+    # Filter semantic hits against the 0.65 cosine similarity gate (L2 <= 0.837 for
+    # structured claims; tighter <= 0.68 for noisy uncategorized 'has_note' logs).
+    qualifying_vec_hits = [
+        h for h in active_vec_hits
+        if (h["distance"] <= 0.68 if h.get("predicate") == "has_note" else h["distance"] <= 0.84)
+    ]
+
     # Step 3: Strict Abstention Gate
-    if not has_exact_predicate_match and best_vec_dist > 0.85:
+    if not has_exact_predicate_match and not qualifying_vec_hits:
         latency_ms = (time.perf_counter() - t0) * 1000.0
         return RetrievalResult(
             status="abstained",
@@ -158,14 +172,27 @@ def recall_context(
 
     if route == "TEMPORAL_HISTORY":
         with store.sm.get_connection(namespace) as conn:
-            rows = conn.execute(
-                """SELECT c.*, s.file_path, s.origin, s.trust_tier
-                   FROM claims_index c
-                   JOIN sources_index s ON c.source_id = s.source_id
-                   WHERE c.namespace = ? AND c.status IN ('active', 'superseded')
-                   ORDER BY c.valid_from ASC""",
-                (namespace,),
-            ).fetchall()
+            if matching_active_predicates:
+                placeholders = ",".join("?" for _ in matching_active_predicates)
+                rows = conn.execute(
+                    f"""SELECT c.*, s.file_path, s.origin, s.trust_tier
+                        FROM claims_index c
+                        JOIN sources_index s ON c.source_id = s.source_id
+                        WHERE c.namespace = ? AND c.status IN ('active', 'superseded')
+                          AND c.predicate IN ({placeholders})
+                        ORDER BY c.valid_from ASC""",
+                    [namespace, *matching_active_predicates],
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT c.*, s.file_path, s.origin, s.trust_tier
+                       FROM claims_index c
+                       JOIN sources_index s ON c.source_id = s.source_id
+                       WHERE c.namespace = ? AND c.status IN ('active', 'superseded')
+                         AND c.predicate != 'has_note'
+                       ORDER BY c.valid_from ASC""",
+                    (namespace,),
+                ).fetchall()
         for r in rows:
             _add_row(dict(r))
 
@@ -200,23 +227,32 @@ def recall_context(
 
     elif route == "SQL_AGGREGATE":
         with store.sm.get_connection(namespace) as conn:
-            rows = conn.execute(
-                """SELECT c.*, s.file_path, s.origin, s.trust_tier
-                   FROM claims_index c
-                   JOIN sources_index s ON c.source_id = s.source_id
-                   WHERE c.namespace = ? AND c.status = 'active'
-                   ORDER BY c.predicate, c.valid_from DESC""",
-                (namespace,),
-            ).fetchall()
+            if matching_active_predicates:
+                placeholders = ",".join("?" for _ in matching_active_predicates)
+                rows = conn.execute(
+                    f"""SELECT c.*, s.file_path, s.origin, s.trust_tier
+                        FROM claims_index c
+                        JOIN sources_index s ON c.source_id = s.source_id
+                        WHERE c.namespace = ? AND c.status = 'active'
+                          AND c.predicate IN ({placeholders})
+                        ORDER BY c.predicate, c.valid_from DESC""",
+                    [namespace, *matching_active_predicates],
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT c.*, s.file_path, s.origin, s.trust_tier
+                       FROM claims_index c
+                       JOIN sources_index s ON c.source_id = s.source_id
+                       WHERE c.namespace = ? AND c.status = 'active'
+                         AND c.predicate != 'has_note'
+                       ORDER BY c.predicate, c.valid_from DESC""",
+                    (namespace,),
+                ).fetchall()
         for r in rows:
             _add_row(dict(r))
 
     else:
-        # HYBRID_TIERED: active vector matches (distance <= 0.85) + predicate keyword matches
-        for h in active_vec_hits:
-            if h["distance"] <= 0.85:
-                _add_row(h)
-
+        # HYBRID_TIERED: prioritize structured active predicate matches, then strict vector matches
         if matching_active_predicates:
             placeholders = ",".join("?" for _ in matching_active_predicates)
             with store.sm.get_connection(namespace) as conn:
@@ -231,6 +267,10 @@ def recall_context(
                 ).fetchall()
             for r in rows:
                 _add_row(dict(r))
+
+        if not matched_rows:
+            for h in qualifying_vec_hits:
+                _add_row(h)
 
     if not matched_rows:
         latency_ms = (time.perf_counter() - t0) * 1000.0
