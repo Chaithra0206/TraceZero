@@ -120,6 +120,8 @@ def handoff_create(
         yaml.safe_dump(frontmatter, sort_keys=False).strip(),
         "---",
         "",
+        f"# Task Handoff: {task_id}",
+        "",
         "## Goal",
         goal,
         "",
@@ -163,9 +165,12 @@ def handoff_create(
     return HandoffPacket(
         packet_id=f"hnd_{uuid.uuid4().hex[:8]}",
         source_agent=agent_id,
+        created_by_agent=agent_id,
         target_agent="agent_b",
         namespace=namespace,
         task_id=task_id,
+        status="in_progress",
+        updated_at=now,
         goal=goal,
         completed_steps=completed_steps,
         pending_steps=pending_steps,
@@ -200,11 +205,17 @@ def handoff_get(
             "relied_on_claims": [],
             "active_decisions": [],
             "citations": [],
+            "stale_warnings": [],
+            "raw_okf_markdown": "",
+            "l0_abstract": "",
             "packed_prompt": "",
             "tokens_used": 0,
         }
 
     raw_text = okf_path.read_text(encoding="utf-8")
+    l0_path = shard_dir / ".abstract.md"
+    l0_abstract = l0_path.read_text(encoding="utf-8") if l0_path.exists() else ""
+
     fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", raw_text, re.DOTALL)
     frontmatter: Dict[str, Any] = {}
     body = raw_text
@@ -234,7 +245,7 @@ def handoff_get(
         elif s.startswith("## Pending Steps"):
             current_section = "pending"
             continue
-        elif s.startswith("## Verified Decisions"):
+        elif s.startswith("## Verified Decisions") or s.startswith("## Active Decisions"):
             current_section = "decisions"
             continue
         elif s.startswith("## Open Questions"):
@@ -244,15 +255,21 @@ def handoff_get(
             current_section = ""
             continue
 
-        if not s or s.startswith("- *(None)*"):
+        if not s or s.startswith("# ") or s.startswith("- *(None)*") or s.startswith("- (None)"):
             continue
 
         if current_section == "goal":
             goal_lines.append(s)
-        elif current_section == "completed" and s.startswith("- [x]"):
-            completed_steps.append(s[5:].strip())
-        elif current_section == "pending" and s.startswith("- [ ]"):
-            pending_steps.append(s[5:].strip())
+        elif current_section == "completed":
+            if s.startswith("- [x]"):
+                completed_steps.append(s[5:].strip())
+            elif s.startswith("- "):
+                completed_steps.append(s[2:].strip())
+        elif current_section == "pending":
+            if s.startswith("- [ ]"):
+                pending_steps.append(s[5:].strip())
+            elif s.startswith("- "):
+                pending_steps.append(s[2:].strip())
         elif current_section == "questions" and s.startswith("- "):
             open_questions.append(s[2:].strip())
 
@@ -261,25 +278,32 @@ def handoff_get(
     # Resolve live provenance quotes for relied_on_claims via store.explain_claim
     active_decisions: List[Dict[str, Any]] = []
     citations: List[str] = []
+    stale_warnings: List[str] = []
     for cid in relied_on_claims:
         explained = store.explain_claim(namespace, cid)
-        if explained and explained.get("status") == ClaimStatus.ACTIVE.value:
-            cite_tag = f"[^{explained['source_id']}]"
-            if cite_tag not in citations:
-                citations.append(cite_tag)
-            active_decisions.append(
-                {
-                    "claim_id": cid,
-                    "subject": explained["subject"],
-                    "predicate": explained["predicate"],
-                    "object_val": explained["object_val"],
-                    "source_id": explained["source_id"],
-                    "citation": cite_tag,
-                    "exact_quote": explained.get("exact_quote", ""),
-                }
+        if not explained:
+            stale_warnings.append(f"Claim '{cid}' was deleted from claims_index.")
+            continue
+        if explained.get("status") != ClaimStatus.ACTIVE.value:
+            stale_warnings.append(
+                f"Claim '{cid}' is no longer active (current status: '{explained.get('status')}')."
             )
+            continue
+        cite_tag = f"[^{explained['source_id']}]"
+        if cite_tag not in citations:
+            citations.append(cite_tag)
+        active_decisions.append(
+            {
+                "claim_id": cid,
+                "subject": explained["subject"],
+                "predicate": explained["predicate"],
+                "object_val": explained["object_val"],
+                "source_id": explained["source_id"],
+                "citation": cite_tag,
+                "exact_quote": explained.get("exact_quote", ""),
+            }
+        )
 
-    # Build compact Agent B handoff prompt (<350 tokens)
     compact_lines: List[str] = [
         f"# Handoff Brief ({parsed_task_id})",
         f"Goal: {goal}",
@@ -303,6 +327,7 @@ def handoff_get(
 
     return {
         "status": "ok",
+        "okf_version": "0.2",
         "task_id": parsed_task_id,
         "namespace": namespace,
         "created_by_agent": created_by_agent,
@@ -314,6 +339,9 @@ def handoff_get(
         "relied_on_claims": relied_on_claims,
         "active_decisions": active_decisions,
         "citations": citations,
+        "stale_warnings": stale_warnings,
+        "raw_okf_markdown": raw_text,
+        "l0_abstract": l0_abstract,
         "packed_prompt": packed_prompt,
         "tokens_used": tokens_used,
     }

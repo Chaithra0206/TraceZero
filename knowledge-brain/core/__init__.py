@@ -7,8 +7,10 @@ from core.contracts import (
     ClaimStatus,
     DeletionReceipt,
     HandoffPacket,
+    RecallResult,
     RetrievalResult,
     SourceRecord,
+    SourceSpan,
     TrustTier,
 )
 from core.forget import forget_target
@@ -62,7 +64,9 @@ __all__ = [
     "ClaimStatus",
     "ClaimRecord",
     "SourceRecord",
+    "SourceSpan",
     "RetrievalResult",
+    "RecallResult",
     "DeletionReceipt",
     "HandoffPacket",
 ]

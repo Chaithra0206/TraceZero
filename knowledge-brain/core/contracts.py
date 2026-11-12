@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum, StrEnum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, model_validator
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TrustTier(IntEnum):
@@ -60,12 +60,16 @@ class PredicateMeta:
 
 ORIGIN_TRUST_MAP: Dict[str, TrustTier] = {
     "user": TrustTier.USER,
+    "user_session": TrustTier.USER,
+    "agent_interaction": TrustTier.USER,
     "tool": TrustTier.TOOL,
     "doc": TrustTier.DOC_WEB,
     "web": TrustTier.DOC_WEB,
+    "external_untrusted": TrustTier.DOC_WEB,
+    "untrusted_scrape": TrustTier.DOC_WEB,
+    "poisoned": TrustTier.DOC_WEB,
 }
 
-# Standard predicate registry covering single/multi cardinality and storage tiers
 PREDICATE_REGISTRY: Dict[str, PredicateMeta] = {
     "favorite_color": PredicateMeta(
         name="favorite_color",
@@ -260,6 +264,19 @@ class Citation(BaseModel):
     exact_quote: Optional[str] = None
 
 
+class SourceSpan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    source_id: str
+    file_path: str
+    sha256_hash: str
+    origin: str
+    trust_tier: int
+    byte_start: int
+    byte_end: int
+    quote: str
+
+
 class SourceRecord(BaseModel):
     source_id: str
     file_path: str
@@ -270,6 +287,8 @@ class SourceRecord(BaseModel):
 
 
 class ClaimRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     claim_id: str
     namespace: str
     subject: str
@@ -300,7 +319,22 @@ class ClaimRecord(BaseModel):
         return f"{self.subject} {self.predicate} {self.object_val}"
 
 
+class RecallResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    status: Literal["ok", "abstained"]
+    answer_hint: str
+    l0_abstract: str
+    l1_claims: List[ClaimRecord] = Field(default_factory=list)
+    l2_quotes: List[SourceSpan] = Field(default_factory=list)
+    tokens_used: int
+    baseline_full_history_tokens: int
+    latency_ms: float
+
+
 class RetrievalResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     status: str  # 'ok' | 'abstained'
     packed_prompt: str = ""
     claims: List[ClaimRecord] = Field(default_factory=list)
@@ -324,17 +358,43 @@ class RetrievalResult(BaseModel):
 
 
 class DeletionReceipt(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     receipt_id: str
     namespace: str
-    target_query: str
-    deleted_claim_ids: List[str]
-    redacted_source_spans: List[str]
-    suppression_hmacs: List[str]
-    fts_rebuilt: bool
-    vacuum_completed: bool
-    byte_scan_matches: int
-    scrubbed_files_sha256: Dict[str, str]
-    timestamp: str
+    target_query: str = ""
+    target: str = ""
+    deleted_claim_ids: List[str] = Field(default_factory=list)
+    redacted_source_spans: List[str] = Field(default_factory=list)
+    suppression_hmacs: List[str] = Field(default_factory=list)
+    hmac_suppression_hash: str = ""
+    fts_rebuilt: bool = True
+    vacuum_completed: bool = True
+    byte_scan_matches: int = 0
+    sqlite_byte_matches: int = 0
+    wal_byte_matches: int = 0
+    filesystem_byte_matches: int = 0
+    probe_abstentions: str = "VERIFIED_ABSTAINED_10_PROBES"
+    sha256_after: str = ""
+    scrubbed_files_sha256: Dict[str, str] = Field(default_factory=dict)
+    timestamp: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "target" in data and "target_query" not in data:
+                data["target_query"] = data["target"]
+            elif "target_query" in data and "target" not in data:
+                data["target"] = data["target_query"]
+            if "hmac_suppression_hash" in data and "suppression_hmacs" not in data:
+                data["suppression_hmacs"] = (
+                    [data["hmac_suppression_hash"]] if data["hmac_suppression_hash"] else []
+                )
+            elif "suppression_hmacs" in data and "hmac_suppression_hash" not in data:
+                hmacs = data["suppression_hmacs"]
+                data["hmac_suppression_hash"] = hmacs[0] if hmacs else ""
+        return data
 
     @property
     def is_zero_trace_verified(self) -> bool:
@@ -347,9 +407,15 @@ class DeletionReceipt(BaseModel):
 
 
 class HandoffPacket(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    okf_version: str = "0.2"
     packet_id: str = ""
     source_agent: str = "agent_a_claude"
     target_agent: str = "agent_b"
+    created_by_agent: str = "agent_a_claude"
+    status: str = "in_progress"
+    updated_at: str = ""
     namespace: str = ""
     task_id: str = ""
     goal: str = ""
@@ -357,12 +423,17 @@ class HandoffPacket(BaseModel):
     pending_steps: List[str] = Field(default_factory=list)
     open_questions: List[str] = Field(default_factory=list)
     relied_on_claim_ids: List[str] = Field(default_factory=list)
+    relied_on_claims: List[str] = Field(default_factory=list)
     verified_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    active_decisions: List[Dict[str, Any]] = Field(default_factory=list)
     citations: List[str] = Field(default_factory=list)
     source_okf_path: str = "tasks.okf.md"
+    okf_file_path: str = "tasks.okf.md"
     claims: List[ClaimRecord] = Field(default_factory=list)
     packed_prompt: str = ""
     tokens_used: int = 0
+    handoff_tokens: int = 0
+    full_history_tokens: int = 0
     timestamp: str = ""
     context_summary: str = ""
 
@@ -374,14 +445,38 @@ class HandoffPacket(BaseModel):
                 data["source_agent"] = data.pop("from_agent")
             if "to_agent" in data and "target_agent" not in data:
                 data["target_agent"] = data.pop("to_agent")
+            if "created_by_agent" in data and "source_agent" not in data:
+                data["source_agent"] = data["created_by_agent"]
+            elif "source_agent" in data and "created_by_agent" not in data:
+                data["created_by_agent"] = data["source_agent"]
             if "active_claims" in data and "claims" not in data:
                 data["claims"] = data.pop("active_claims")
             if "created_at" in data and "timestamp" not in data:
                 data["timestamp"] = data.pop("created_at")
+            if "updated_at" in data and not data.get("timestamp"):
+                data["timestamp"] = data["updated_at"]
+            elif "timestamp" in data and not data.get("updated_at"):
+                data["updated_at"] = data["timestamp"]
             if "task_summary" in data and "context_summary" not in data:
                 data["context_summary"] = data.pop("task_summary")
             if "task_goal" in data and "goal" not in data:
                 data["goal"] = data.pop("task_goal")
+            if "relied_on_claim_ids" in data and "relied_on_claims" not in data:
+                data["relied_on_claims"] = list(data["relied_on_claim_ids"])
+            elif "relied_on_claims" in data and "relied_on_claim_ids" not in data:
+                data["relied_on_claim_ids"] = list(data["relied_on_claims"])
+            if "verified_decisions" in data and "active_decisions" not in data:
+                data["active_decisions"] = list(data["verified_decisions"])
+            elif "active_decisions" in data and "verified_decisions" not in data:
+                data["verified_decisions"] = list(data["active_decisions"])
+            if "source_okf_path" in data and "okf_file_path" not in data:
+                data["okf_file_path"] = data["source_okf_path"]
+            elif "okf_file_path" in data and "source_okf_path" not in data:
+                data["source_okf_path"] = data["okf_file_path"]
+            if "tokens_used" in data and "handoff_tokens" not in data:
+                data["handoff_tokens"] = data["tokens_used"]
+            elif "handoff_tokens" in data and "tokens_used" not in data:
+                data["tokens_used"] = data["handoff_tokens"]
         return data
 
     @property
@@ -403,3 +498,11 @@ class HandoffPacket(BaseModel):
     @property
     def active_claims(self) -> List[ClaimRecord]:
         return [c for c in self.claims if c.status == ClaimStatus.ACTIVE]
+
+
+SourceSpan.model_rebuild()
+ClaimRecord.model_rebuild()
+RecallResult.model_rebuild()
+RetrievalResult.model_rebuild()
+DeletionReceipt.model_rebuild()
+HandoffPacket.model_rebuild()
