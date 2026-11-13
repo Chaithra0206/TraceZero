@@ -194,3 +194,8 @@ class ShardManager:
                 (claim.claim_id, vec_rowid, fts_rowid, claim.okf_file),
             )
             conn.commit()
+
+
+def close_all_shards() -> None:
+    """Flush and close active shard resources if needed."""
+    pass

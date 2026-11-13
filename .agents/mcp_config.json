@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "knowledge-brain": {
+      "command": "C:\\Users\\Chaithra\\Desktop\\TraceZero\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\Chaithra\\Desktop\\TraceZero\\mcp_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\Chaithra\\Desktop\\TraceZero;C:\\Users\\Chaithra\\Desktop\\TraceZero\\knowledge-brain",
+        "MEMORY_ROOT": "C:\\Users\\Chaithra\\Desktop\\TraceZero\\memory_root"
+      }
+    }
+  }
+}
+
