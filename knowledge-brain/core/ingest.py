@@ -59,6 +59,12 @@ def extract_heuristic_candidates(
     raw_text: str, default_subject: str = "user"
 ) -> List[ExtractedCandidate]:
     """Regex and heuristic extractor for user facts, decisions, and tasks."""
+    # Detect optional dialogue speaker prefix like "[date] Caroline: ..." when subject is generic
+    if default_subject == "user":
+        spk_m = re.match(r"^(?:\[[^\]]+\]\s*)?([A-Z][A-Za-z0-9_-]{1,30}):\s+", raw_text.strip())
+        if spk_m:
+            default_subject = spk_m.group(1).strip().lower()
+
     candidates: List[ExtractedCandidate] = []
     clauses = split_into_atomic_clauses(raw_text) or ([raw_text.strip()] if raw_text.strip() else [])
 
@@ -399,17 +405,17 @@ def extract_heuristic_candidates(
         )
 
     # 10. Fallback contextual note if nothing else matched
-    if not candidates and clauses:
-        first_clause = clauses[0].rstrip(".,!?;:").strip()
-        if first_clause:
-            candidates.append(
-                ExtractedCandidate(
-                    subject=default_subject,
-                    predicate="has_note",
-                    object_val=first_clause[:100],
-                    exact_quote=first_clause,
-                )
+    if not candidates and raw_text.strip():
+        full_note = raw_text.strip()
+        # Strip leading speaker prefix only if we already promoted speaker into default_subject? Keep full_note for exact byte span!
+        candidates.append(
+            ExtractedCandidate(
+                subject=default_subject,
+                predicate="has_note",
+                object_val=full_note[:400],
+                exact_quote=full_note,
             )
+        )
 
     return candidates
 
@@ -423,6 +429,7 @@ def ingest_message(
     session_id: Optional[str] = None,
     candidates: Optional[List[ExtractedCandidate]] = None,
     llm_extractor: Optional[Callable[[str], List[ExtractedCandidate]]] = None,
+    subject: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Ingest raw text via MemoryStore, verify byte spans, apply policy, and index."""
     now = datetime.now(timezone.utc).isoformat()
@@ -450,7 +457,11 @@ def ingest_message(
     elif llm_extractor is not None:
         extracted = llm_extractor(text)
     else:
-        default_subject = namespace.split("/")[-1] if "users" in namespace else "user"
+        default_subject = (
+            subject.strip().lower()
+            if subject and subject.strip()
+            else (namespace.split("/")[-1] if "users" in namespace else "user")
+        )
         extracted = extract_heuristic_candidates(text, default_subject=default_subject)
 
     results: List[Dict[str, Any]] = []
