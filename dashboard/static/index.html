@@ -90,7 +90,7 @@
 
         <div class="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Port 8080 Active</span>
+          <span x-text="'Port ' + (window.location.port || '80') + ' Active'">Port Active</span>
         </div>
       </div>
     </div>

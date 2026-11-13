@@ -17,7 +17,7 @@ from mcp.client.stdio import stdio_client
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PYTHON_BIN = str(REPO_ROOT / "knowledge-brain" / ".venv" / "bin" / "python")
+PYTHON_BIN = sys.executable
 MCP_SCRIPT = str(REPO_ROOT / "mcp_server.py")
 
 

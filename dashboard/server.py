@@ -438,12 +438,22 @@ def serve_index():
     return HTMLResponse("<h1>Knowledge Brain Dashboard Loading...</h1>")
 
 
+def _is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def main():
+    default_port = 8080
+    if _is_port_in_use(default_port):
+        default_port = 8081
+    port = int(os.environ.get("DASHBOARD_PORT", os.environ.get("PORT", str(default_port))))
     print("=" * 70)
     print(" Starting Knowledge Brain Audit & Provenance Dashboard...")
-    print(" URL: http://127.0.0.1:8080")
+    print(f" URL: http://127.0.0.1:{port}")
     print("=" * 70)
-    uvicorn.run("dashboard.server:app", host="127.0.0.1", port=8080, reload=False)
+    uvicorn.run("dashboard.server:app", host="127.0.0.1", port=port, reload=False)
 
 
 if __name__ == "__main__":
