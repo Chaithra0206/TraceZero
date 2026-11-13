@@ -144,6 +144,25 @@ def recall_context(
         if pred_lower in q_words or pred_parts[-1] in q_words or bool(q_words & kw_set):
             matching_active_predicates.append(pred)
 
+    # Check if the query asks about a predicate slot that was explicitly deleted (tombstone check)
+    from core.forget import compute_fact_hmac
+    with store.sm.get_connection(namespace) as conn:
+        suppr_rows = conn.execute("SELECT fact_hmac FROM suppression_hashes").fetchall()
+    suppr_hmacs = {r[0] for r in suppr_rows}
+    for cand_pred, kw_set in PREDICATE_KEYWORDS.items():
+        if cand_pred not in active_predicates and (cand_pred in q_words or bool(q_words & kw_set)):
+            if compute_fact_hmac("__deleted_predicate__", cand_pred, "__any__") in suppr_hmacs:
+                latency_ms = (time.perf_counter() - t0) * 1000.0
+                return RetrievalResult(
+                    status="abstained",
+                    route=route,
+                    packed_prompt="I have no memory of that.",
+                    claims=[],
+                    citations=[],
+                    tokens_used=0,
+                    latency_ms=latency_ms,
+                )
+
     has_exact_predicate_match = len(matching_active_predicates) > 0
 
     stopwords = {
@@ -169,7 +188,10 @@ def recall_context(
         "pin", "ssn", "passport", "account", "routing", "cipher",
         "recovery", "break",
     }
-    is_sensitive_query = bool((q_words | raw_content_terms) & sensitive_terms)
+    q_low = query.lower()
+    is_sensitive_query = bool((q_words | raw_content_terms) & sensitive_terms) or any(
+        s in q_low for s in ("vault", "secret", "passphrase", "password", "passcode", "credential")
+    )
 
     def _stem(tok: str) -> str:
         for suf in ("ingly", "edly", "ing", "ied", "ies", "ed", "es", "ly", "er", "s"):
@@ -191,6 +213,7 @@ def recall_context(
             (
                 "_" not in vt
                 and len(vt) >= 4
+                and abs(len(qs) - len(vt)) <= 3
                 and (vt.startswith(pref) or (len(vt) >= 5 and qs.startswith(vt[:5])))
             )
             for vt in vocab
@@ -247,9 +270,16 @@ def recall_context(
         dist = float(h.get("distance", 999.0))
         pred = h.get("predicate", "")
         if pred not in ("has_note", "stated"):
+            if is_sensitive_query and pred not in matching_active_predicates and not (set(pred.split("_")) & sensitive_terms):
+                continue
             max_uncond_dist = 0.72 if is_sensitive_query else 0.76
             max_lex_dist = 0.80 if is_sensitive_query else 0.84
             if dist <= max_uncond_dist:
+                if is_sensitive_query and query_content_terms:
+                    struct_text = f"{h.get('subject', '')} {pred.replace('_', ' ')} {h.get('object_val', '')}".lower()
+                    struct_terms = set(re.findall(r"[a-z0-9]+", struct_text))
+                    if not (query_content_terms & struct_terms):
+                        continue
                 strict_vec_hits.append(h)
                 support_vec_hits.append(h)
             elif dist <= max_lex_dist:
@@ -283,7 +313,13 @@ def recall_context(
             continue
 
         if is_sensitive_query:
-            passes_strict = (dist <= 0.68 and term_overlap >= 0.25) or (dist <= 0.80 and term_overlap >= 0.40)
+            strict_sens_terms = query_content_terms - {"session", "earlier", "memory", "stored", "recorded", "namespace", "temporary", "emergency", "migration", "cutover"}
+            sens_matched = sum(1 for qt in strict_sens_terms if _term_in_vocab(qt, obj_terms))
+            sens_overlap = sens_matched / max(len(strict_sens_terms), 1)
+            passes_strict = (
+                (dist <= 0.68 and sens_matched >= 1 and sens_overlap >= 0.25)
+                or (dist <= 0.80 and sens_matched >= 2 and sens_overlap >= 0.40)
+            )
             passes_support = passes_strict
         elif mentioned_subjects and _is_second_person_attribution(str(h.get("object_val", ""))):
             passes_strict = False

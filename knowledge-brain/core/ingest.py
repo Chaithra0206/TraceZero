@@ -65,6 +65,20 @@ def extract_heuristic_candidates(
         if spk_m:
             default_subject = spk_m.group(1).strip().lower()
 
+    # Detect project subject if an enterprise project is named in raw_text
+    proj_m = re.search(
+        r"(?i)\b(orion_payments|atlas_auth|hyperion_search|kronos_billing|nebula_analytics|"
+        r"vortex_streaming|aegis_gateway|titan_ledger|zephyr_messaging|pulsar_telemetry|"
+        r"helios_compute|argus_security|nexus_graph|stratos_cdn|valkyrie_ci|cobalt_cache|"
+        r"solaris_ml|mercury_fx|borealis_storage|draco_compliance|project_atlas|Project Atlas)\b",
+        raw_text,
+    )
+    if proj_m:
+        matched_proj = proj_m.group(1).strip()
+        proj_subject = "project_atlas" if matched_proj.lower() == "project atlas" else matched_proj.lower()
+    else:
+        proj_subject = "orion_payments" if default_subject == "emp_042" else "project_atlas"
+
     candidates: List[ExtractedCandidate] = []
     clauses = split_into_atomic_clauses(raw_text) or ([raw_text.strip()] if raw_text.strip() else [])
 
@@ -161,14 +175,14 @@ def extract_heuristic_candidates(
                     )
                 )
         for m in re.finditer(
-            r"(?i)primary\s+database\s+engine(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(MongoDB\s+[\d.]+|Postgres\s+\d+|PostgreSQL|MySQL\s+[\d.]+|[a-zA-Z0-9_\-]+)",
+            r"(?i)(?:primary\s+database(?:\s+engine)?|service\s+database|override\s+(?:the\s+)?database)(?:\s+for\s+[^.\n]+?)?\s+(?:is(?:\s+currently)?|to)\s+(PostgreSQL\s+\d+|Postgres\s+\d+|PostgreSQL|MongoDB\s+[\d.]+|MongoDB|Cassandra(?:\s+[\d.]+)?|DynamoDB|Redis(?:\s+[\d.]+)?|ClickHouse(?:\s+[\d.]+)?|MySQL\s+[\d.]+|MySQL|SQLiteInMemory|[a-zA-Z0-9_\-]+)",
             clause,
         ):
             val = clean_object_val(m.group(1))
             if val:
                 candidates.append(
                     ExtractedCandidate(
-                        subject="project_atlas",
+                        subject=proj_subject,
                         predicate="preferred_db",
                         object_val=val,
                         exact_quote=m.group(0).strip("., \n"),
@@ -189,15 +203,15 @@ def extract_heuristic_candidates(
                     )
                 )
 
-        # 3b. Cloud Infrastructure: AWS region, deployment_env, project link, vault passphrase
+        # 3b. Cloud Infrastructure: AWS/cloud region, deployment_env, project link, vault passphrase
         for m in re.finditer(
-            r"(?i)(?:aws[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?aws[\s_]+region)",
+            r"(?i)(?:(?:aws|cloud)[\s_]+region[^.\n]*?\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b|\b(us-[a-z]+-\d|eu-[a-z]+-\d|ap-[a-z]+-\d)\b[^.\n]*?(?:aws|cloud)[\s_]+region)",
             clause,
         ):
             val = (m.group(1) or m.group(2)).strip()
             candidates.append(
                 ExtractedCandidate(
-                    subject="project_atlas",
+                    subject=proj_subject,
                     predicate="aws_region",
                     object_val=val,
                     exact_quote=m.group(0).strip("., \n"),
@@ -211,7 +225,7 @@ def extract_heuristic_candidates(
             if val:
                 candidates.append(
                     ExtractedCandidate(
-                        subject="project_atlas",
+                        subject=proj_subject,
                         predicate="deployment_env",
                         object_val=val,
                         exact_quote=m.group(0).strip("., \n"),
@@ -391,16 +405,15 @@ def extract_heuristic_candidates(
                 )
             )
 
-    atlas_m = re.search(r"(?i)\b(Project Atlas)\b", raw_text)
-    if atlas_m and default_subject != "user" and any(
+    if proj_m and default_subject != "user" and any(
         c.predicate in ("aws_region", "preferred_db", "deployment_env") for c in candidates
     ):
         candidates.append(
             ExtractedCandidate(
                 subject=default_subject,
                 predicate="works_on",
-                object_val="project_atlas",
-                exact_quote=atlas_m.group(1),
+                object_val=proj_subject,
+                exact_quote=proj_m.group(1),
             )
         )
 

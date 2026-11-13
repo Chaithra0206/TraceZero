@@ -175,18 +175,15 @@ knowledge-brain/evals/data/locomo10.json
 evals/data/locomo10.json
 
 # Runtime Memory Store & SQLite Ephemeral Files
+memory_root/
+knowledge-brain/memory_root/
 *.sqlite
 *.sqlite3
 *.db
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite-journal
-memory_root/**/sources/session_20*.txt
-knowledge-brain/memory_root/**/sources/session_20*.txt
-memory_root/**/receipts/del_*.json
-knowledge-brain/memory_root/**/receipts/del_*.json
-!memory_root/**/receipts/del_receipt_01.json
-!knowledge-brain/memory_root/**/receipts/del_receipt_01.json
+*.jsonl.bak
 
 # OS & Editor files
 .DS_Store
